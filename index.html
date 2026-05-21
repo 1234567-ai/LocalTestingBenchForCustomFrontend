@@ -2,135 +2,171 @@
 <html lang="en">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>un-reader [E-INK CORE]</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+  <title>KindleChat</title>
   <style type="text/css">
-    /* High-Contrast Stark Black & White E-Ink Structural Baseline Rules */
+    /* SYSTEM 7 HIGH-CONTRAST E-INK AESTHETICS */
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --border: 2px solid #000000;
+      --shadow: 4px 4px 0px #000000;
+      --stripe-pattern: repeating-linear-gradient(0deg, transparent, transparent 2px, #000 3px, #000 4px);
+    }
+
     html, body {
-      margin: 0; padding: 0; overflow: auto;
+      margin: 0; padding: 0; overflow: hidden;
       height: 100%; width: 100%;
-      font-family: monospace; background-color: #ffffff; color: #000000;
+      font-family: "Geneva", "Verdana", sans-serif;
+      background-color: #e5e5e5;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
     }
-    .paper { 
-      border: 3px solid #000000; background-color: #ffffff; color: #000000; margin: 4px; padding: 6px;
+
+    /* WINDOW CONTAINER MATRIX */
+    .window {
+      background: white; border: 2px solid black; box-shadow: var(--shadow);
+      display: flex; flex-direction: column; height: 95vh; width: 98vw; max-width: 900px; position: relative;
     }
-    #title-bar { height: 45px; border-bottom: 4px double #000000; padding: 4px; }
-    #title-bar h1 { font-size: 18px; margin: 0; float: left; font-weight: bold; text-transform: uppercase; }
-    #title-right { float: right; font-size: 12px; }
-    #logout-btn { font-family: monospace; cursor: pointer; background: #ffffff; border: 3px solid #000000; font-weight: bold; padding: 4px 8px; }
+
+    /* SYSTEM 7 STRIPED TITLE BAR */
+    .title-bar {
+      height: 35px; border-bottom: 2px solid black; display: flex; align-items: center; justify-content: center; background: white; padding: 0 10px; position: relative; flex-shrink: 0;
+    }
+    .title-stripes { position: absolute; top: 4px; bottom: 4px; left: 4px; right: 4px; background-image: var(--stripe-pattern); z-index: 0; }
+    .title-text { background: white; padding: 0 15px; font-weight: bold; z-index: 1; font-size: 14px; text-transform: uppercase; }
     
-    /* Static Table Structure - Avoids CSS3 Flexbox bugs on old E-reader browsers */
-    #workspace-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-    #sidebar-cell { width: 230px; border-right: 4px double #000000; vertical-align: top; padding: 4px; }
-    #chat-cell { vertical-align: top; padding: 4px; }
+    #logout-btn { position: absolute; left: 10px; z-index: 2; cursor: pointer; font-family: monospace; font-size: 11px; background: white; border: 2px solid black; padding: 2px 6px; box-shadow: 2px 2px 0 black; font-weight: bold; }
+    #logout-btn:active { background: black; color: white; box-shadow: none; }
+
+    #user-display { position: absolute; right: 10px; z-index: 2; font-size: 11px; font-weight: bold; background: white; padding: 2px 6px; border: 1px solid black; }
+
+    /* CORE ARCHITECTURE GRID TABLE */
+    #workspace-table { width: 100%; height: calc(100% - 37px); border-collapse: collapse; table-layout: fixed; }
+    #sidebar-cell { width: 240px; background: #fafafa; border-right: 2px solid black; vertical-align: top; padding: 0; }
+    #chat-cell { vertical-align: top; padding: 0; position: relative; background-color: #ffffff; }
+
+    /* SIDEBAR COMPONENT INTERFACES */
+    .panel-header { font-weight: bold; padding: 8px; text-transform: uppercase; border-bottom: 2px solid black; background: #eee; font-size: 11px; letter-spacing: 1px; }
+    #roster-list, #dm-list { max-height: 140px; overflow-y: auto; background: white; }
     
-    .panel-header { font-weight: bold; padding: 6px; text-transform: uppercase; border-bottom: 2px solid #000000; font-size: 13px; margin-bottom: 4px; }
-    .nav-item { padding: 8px; cursor: pointer; border: 2px solid #000000; font-size: 12px; margin-bottom: 4px; background: #ffffff; }
+    .roster-user { padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 12px; clear: both; }
+    .roster-name { font-weight: bold; cursor: pointer; text-decoration: underline; }
+    .roster-action-btn { float: right; font-size: 9px; background: white; border: 1px solid black; font-weight: bold; cursor: pointer; padding: 0 3px; }
+
+    .nav-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 12px; background: white; }
+    .nav-item:hover { background: #f0f0f0; }
     .nav-item-active { background-color: #000000 !important; color: #ffffff !important; font-weight: bold; }
-    #dm-target-input { padding: 4px; font-family: monospace; font-size: 12px; width: 90%; margin-bottom: 6px; border: 2px solid #000000; }
+    #dm-target-input { margin: 4px; padding: 4px; font-family: monospace; font-size: 11px; outline: none; width: calc(100% - 16px); border: 1px solid black; }
 
-    /* Static Non-Scrolling Pagination Frame Components */
-    #pagination-header-bar { padding: 6px; margin-bottom: 8px; border-bottom: 2px solid #000000; clear: both; }
-    .page-btn { background: #ffffff; border: 3px solid #000000; padding: 4px 12px; font-family: monospace; font-weight: bold; cursor: pointer; }
-    #chat-static-frame { width: 100%; min-height: 420px; background-color: #ffffff; }
+    #settings-box-container { padding: 6px; background: white; border-bottom: 1px solid #ccc; }
+    .settings-input { width: 90%; padding: 3px; margin-bottom: 4px; font-family: monospace; font-size: 11px; border: 1px solid black; }
+    .settings-btn { width: 95%; font-family: monospace; font-size: 11px; font-weight: bold; background: white; border: 2px solid black; cursor: pointer; padding: 2px 0; }
+
+    /* E-INK SNAP PAGINATION SYSTEM */
+    #pagination-header-bar { padding: 6px; background: #eee; border-bottom: 2px solid #000000; text-align: center; height: 26px; }
+    .page-btn { background: #ffffff; border: 2px solid #000000; padding: 2px 8px; font-family: monospace; font-weight: bold; cursor: pointer; font-size: 11px; box-shadow: 1px 1px 0 black; }
+    .page-btn:active { box-shadow: none; transform: translate(1px, 1px); }
+    #page-display-index { margin: 0 10px; font-weight: bold; font-size: 12px; }
+
+    /* CHAT STREAM TERMINAL */
+    #chat-scroll-wrapper { position: absolute; top: 40px; bottom: 55px; left: 0; right: 0; overflow-y: auto; padding: 12px; }
+    #typing-indicator { position: absolute; bottom: 58px; left: 12px; font-size: 11px; font-weight: bold; color: #555; font-style: italic; height: 15px; }
+
+    /* FOOTER CONTROL DOCK CONTAINER */
+    #input-bar-container { position: absolute; bottom: 0; left: 0; right: 0; height: 52px; background-color: #eee; padding: 8px; box-sizing: border-box; border-top: 2px solid black; }
+    #content { float: left; width: 78%; padding: 6px; font-size: 13px; font-family: monospace; border: 2px solid black; outline: none; background: white; }
+    #send { float: right; width: 18%; height: 32px; cursor: pointer; font-family: monospace; font-weight: bold; font-size: 12px; background: white; border: 2px solid black; box-shadow: 2px 2px 0 black; }
+    #send:active { box-shadow: none; transform: translate(1px, 1px); }
+
+    /* MESSAGE BUBBLES CARDS */
+    .message-container { width: 100%; margin-bottom: 10px; clear: both; display: block; }
+    .message { border: 2px solid black; padding: 6px 10px; max-width: 75%; width: auto; position: relative; background: white; box-shadow: 2px 2px 0px black; }
+    .message-meta { font-size: 10px; font-weight: bold; color: #555; margin-bottom: 3px; text-transform: uppercase; }
+    .message-text { font-size: 13px; white-space: pre-wrap; line-height: 1.3; color: black; }
     
-    #input-bar-container { margin-top: 15px; padding: 8px; border-top: 4px double #000000; clear: both; }
-    #content { width: 75%; padding: 6px; font-size: 14px; font-family: monospace; border: 3px solid #000000; float: left; background: #ffffff; }
-    #send { width: 20%; height: 34px; float: right; background: #ffffff; border: 3px solid #000000; font-family: monospace; font-weight: bold; cursor: pointer; }
+    .my-msg { float: right; border-style: dashed; }
+    .other-msg { float: left; }
 
-    .message-container { width: 100%; margin-bottom: 12px; clear: both; display: block; }
-    .message { border: 2px solid #000000; padding: 8px 12px; max-width: 80%; width: auto; position: relative; background: #ffffff; }
-    .message-meta { font-size: 11px; font-weight: bold; margin-bottom: 2px; text-transform: uppercase; }
-    .message-text { font-size: 14px; white-space: pre-wrap; line-height: 1.4; color: #000000; }
-    
-    /* Plain layouts use high contrast outlines instead of color tints */
-    .my-msg { float: right; border: 3px dashed #000000; }
-    .other-msg { float: left; border: 2px solid #000000; }
+    /* SYSTEM OPERATOR SPECIAL CARDS LAYER (augustinejames & tockdev) */
+    .boss-msg { float: right; border: 4px double black !important; background: #fff !important; box-shadow: 4px 4px 0px black !important; }
+    .boss-meta { color: black !important; font-weight: bold !important; text-decoration: underline; }
+    .del-btn { position: absolute; top: 3px; right: 3px; border: 1px solid black; background: white; font-size: 9px; cursor: pointer; font-weight: bold; padding: 0 3px; }
 
-    /* 👑 Crisp Double-Thick Lines for Augustinejames & Tockdev profiles */
-    .boss-msg { float: right; border: 5px double #000000 !important; }
-    .boss-meta { font-weight: bold; text-decoration: underline; }
-
-    .del-btn { position: absolute; top: 4px; right: 4px; border: 2px solid #000000; background: #ffffff; font-size: 10px; cursor: pointer; font-weight: bold; padding: 0 4px; }
-
-    #roster-list, #dm-list { margin-bottom: 10px; }
-    .roster-user { padding: 5px; border: 2px solid #000000; margin-bottom: 4px; font-size: 11px; background: #ffffff; }
-    .roster-name { cursor: pointer; text-decoration: underline; font-weight: bold; }
-    .roster-action-btn { float: right; font-size: 9px; background: #ffffff; border: 2px solid #000000; cursor: pointer; font-weight: bold; padding: 0 2px; }
-
-    #settings-box-container { padding: 4px; border: 2px dashed #000000; margin-bottom: 8px; background: #ffffff; }
-    .settings-input { width: 88%; padding: 4px; margin-bottom: 4px; font-family: monospace; font-size: 11px; border: 2px solid #000000; }
-    .settings-btn { width: 95%; font-family: monospace; font-size: 11px; font-weight: bold; background: #ffffff; border: 3px solid #000000; cursor: pointer; padding: 4px 0; }
-
-    #auth-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: #ffffff; display: block; z-index: 100; text-align: center; padding-top: 60px; }
-    .auth-box { padding: 25px; width: 280px; margin: 0 auto; border: 4px double #000000; background: #ffffff; }
-    .auth-box input { width: 88%; padding: 6px; margin: 6px 0; font-family: monospace; border: 3px solid #000000; }
-    .auth-box button { width: 95%; padding: 8px; margin-top: 8px; cursor: pointer; font-family: monospace; font-weight: bold; background: #ffffff; border: 3px solid #000000; }
-    .auth-toggle { font-size: 11px; margin-top: 12px; cursor: pointer; text-decoration: underline; font-weight: bold; color: #000000; }
+    /* LOGIN PANEL OVERLAY STYLING */
+    #auth-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.3); display: block; z-index: 1000; text-align: center; padding-top: 100px; }
+    .auth-box { padding: 24px; width: 280px; margin: 0 auto; background: white; border: 2px solid black; box-shadow: var(--shadow); }
+    .auth-box h2 { font-size: 16px; margin-top: 0; font-weight: bold; letter-spacing: 1px; }
+    .auth-box input { width: 90%; padding: 6px; margin: 6px 0; font-family: monospace; border: 2px solid black; }
+    .auth-box button { width: 96%; padding: 8px; margin-top: 8px; cursor: pointer; font-family: monospace; font-weight: bold; background: white; border: 2px solid black; box-shadow: 2px 2px 0 black; }
+    .auth-box button:active { box-shadow: none; transform: translate(1px, 1px); }
+    .auth-toggle { font-size: 11px; margin-top: 12px; cursor: pointer; text-decoration: underline; color: blue; font-weight: bold; }
   </style>
 </head>
 <body>
 
+  <!-- System 7 Auth Container Layer -->
   <div id="auth-screen">
     <div class="auth-box">
-      <h2 id="auth-title" style="margin-top:0; text-transform:uppercase; font-weight:bold;">Login</h2>
+      <h2 id="auth-title">LOGIN</h2>
       <input type="text" id="auth-user" placeholder="Username" autocomplete="off">
       <input type="password" id="auth-pass" placeholder="Password">
       <button id="auth-submit-btn">SUBMIT</button>
-      <div id="auth-toggle" class="auth-toggle">Create an account instead</div>
+      <div id="auth-toggle" class="auth-toggle">Need to create an account? Register</div>
     </div>
   </div>
 
-  <div class="paper" id="title-bar">
-    <h1>un-reader</h1>
-    <div id="title-right">
-      <span id="user-display" style="font-weight:bold; margin-right:10px;"></span>
+  <!-- Main System Frame Window -->
+  <div class="window">
+    <div class="title-bar">
+      <div class="title-stripes"></div>
       <button id="logout-btn">LOGOUT</button>
+      <div class="title-text">KindleChat</div>
+      <span id="user-display"></span>
     </div>
+    
+    <table id="workspace-table">
+      <tr>
+        <td id="sidebar-cell">
+          <div class="panel-header">🟢 Online Users</div>
+          <div id="roster-list"></div>
+
+          <div class="panel-header">Channels</div>
+          <div class="nav-item nav-item-active" id="nav-public" onclick="switchChannel('public', '')">🌍 Global Chat</div>
+          
+          <div class="panel-header">Direct Messages</div>
+          <input type="text" id="dm-target-input" placeholder="+ Target name & Enter..." autocomplete="off">
+          <div id="dm-list"></div>
+          
+          <div class="panel-header">Account Profile</div>
+          <div id="settings-box-container">
+            <input type="password" id="settings-new-pass" class="settings-input" placeholder="New Password...">
+            <button id="settings-save-btn" class="settings-btn">UPDATE</button>
+          </div>
+        </td>
+        <td id="chat-cell">
+          <!-- Static Snap Navigation Header Desk Bar for E-Ink Refresh Sync -->
+          <div id="pagination-header-bar">
+            <button class="page-btn" id="prev-page-btn" onclick="jumpToPreviousPage()">&lt; NEWER LOGS</button>
+            <span id="page-display-index">PAGE: 0</span>
+            <button class="page-btn" id="next-page-btn" onclick="jumpToNextPage()">OLDER LOGS &gt;</button>
+          </div>
+
+          <div id="chat-scroll-wrapper"></div>
+          <div id="typing-indicator"></div>
+          
+          <div id="input-bar-container">
+            <input type="text" id="content" placeholder="Enter message text here..." autocomplete="off">
+            <button id="send">SEND</button>
+          </div>
+        </td>
+      </tr>
+    </table>
   </div>
-  
-  <table id="workspace-table">
-    <tr>
-      <td id="sidebar-cell">
-        <div class="panel-header">🟢 Online</div>
-        <div id="roster-list"></div>
-
-        <div class="panel-header">Channels</div>
-        <div class="nav-item nav-item-active" id="nav-public" onclick="switchChannel('public', '')">🌍 Global Chat</div>
-        
-        <div class="panel-header">Direct Messages</div>
-        <input type="text" id="dm-target-input" placeholder="+ Type user & press Enter..." autocomplete="off">
-        <div id="dm-list"></div>
-        
-        <div class="panel-header">Settings</div>
-        <div id="settings-box-container">
-          <input type="password" id="settings-new-pass" class="settings-input" placeholder="New Password...">
-          <button id="settings-save-btn" class="settings-btn">UPDATE</button>
-        </div>
-      </td>
-      <td id="chat-cell">
-        <!-- High Contrast Button Page turning panel to replace continuous scrolling -->
-        <div id="pagination-header-bar">
-          <button class="page-btn" id="prev-page-btn" onclick="jumpToPreviousPage()">&lt; PREV LOGS</button>
-          <span id="page-display-index" style="margin: 0 15px; font-weight: bold;">PAGE: 0</span>
-          <button class="page-btn" id="next-page-btn" onclick="jumpToNextPage()">OLDER LOGS &gt;</button>
-        </div>
-
-        <div id="chat-static-frame"></div>
-        <div id="typing-indicator" style="display:none;"></div>
-        
-        <div id="input-bar-container">
-          <input type="text" id="content" placeholder="Enter message text..." autocomplete="off">
-          <button id="send">SEND</button>
-        </div>
-      </td>
-    </tr>
-  </table>
 
   <script type="text/javascript">
-    // ⚠️ CONFIGURATION TARGET: REPLACE BOTH URLS BELOW WITH YOUR RENDER APP ADDRESS
-    var BACKEND_URL = "https://unreadeer.onrender.com"; 
-    var WS_URL = "wss://unreader.onrender.com";
+    // ⚠️ CONFIGURATION TARGET: REPLACE BOTH URLS BELOW WITH YOUR RENDER APP ADDRESS BEFORE GIT ACTIONS
+    var BACKEND_URL = "https://onrender.com"; 
+    var WS_URL = "wss://://onrender.com";
 
     var token = localStorage.getItem('token');
     var myUsername = localStorage.getItem('username');
@@ -138,13 +174,14 @@
     var currentDMTarget = '';
     var socket = null;
     var isRegisterMode = false;
+    var typingClearTimer = null;
     var currentHistoryIndex = 0;
 
     var authToggle = document.getElementById('auth-toggle');
     authToggle.onclick = function() {
       isRegisterMode = !isRegisterMode;
-      document.getElementById('auth-title').textContent = isRegisterMode ? 'Register' : 'Login';
-      authToggle.textContent = isRegisterMode ? 'Already have an account? Login' : 'Create an account instead';
+      document.getElementById('auth-title').textContent = isRegisterMode ? 'REGISTER' : 'LOGIN';
+      authToggle.textContent = isRegisterMode ? 'Already have an account? Login' : 'Need to create an account? Register';
     };
 
     function isMasterAdmin(name) {
@@ -186,7 +223,7 @@
           var data = JSON.parse(xhr.responseText);
           if (data.error) return alert(data.error);
           document.getElementById('settings-new-pass').value = '';
-          alert('Password modified successfully');
+          alert('Password profile modified successfully');
         }
       };
       xhr.send(JSON.stringify({ password: newPassword }));
@@ -264,7 +301,7 @@
           modBtn.textContent = 'TERM';
           (function(uname) {
             modBtn.onclick = function() {
-              if (confirm('Terminate account connection profile for: ' + uname + '?')) {
+              if (confirm('Terminate connection for: ' + uname + '?')) {
                 socket.send(JSON.stringify({ type: 'mod_kick', target: uname }));
               }
             };
@@ -345,7 +382,7 @@
     }
 
     function appendMessage(data) {
-      var chatWrapper = document.getElementById('chat-static-frame');
+      var chatWrapper = document.getElementById('chat-scroll-wrapper');
       var containerDiv = document.createElement('div');
       containerDiv.className = 'message-container';
       
@@ -377,6 +414,7 @@
       msgDiv.querySelector('.message-text').textContent = data.content;
       containerDiv.appendChild(msgDiv);
       chatWrapper.appendChild(containerDiv);
+      chatWrapper.scrollTop = chatWrapper.scrollHeight;
     }
 
     function triggerMsgDeletion(msgId) {
@@ -387,7 +425,7 @@
     }
 
     function loadHistory() {
-      document.getElementById('chat-static-frame').innerHTML = '';
+      document.getElementById('chat-scroll-wrapper').innerHTML = '';
       var xhr = new XMLHttpRequest();
       if (currentMode === 'public') {
         xhr.open('GET', BACKEND_URL + '/history?index=' + currentHistoryIndex, true);
@@ -416,6 +454,12 @@
     }
 
     var input = document.getElementById('content');
+    input.oninput = function() {
+        if (currentMode === 'dm' && socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'typing', target: currentDMTarget }));
+        }
+    };
+
     function sendMessage() {
       var text = input.value.trim();
       if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
