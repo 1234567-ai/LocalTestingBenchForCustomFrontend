@@ -105,6 +105,13 @@
     
     .mod-log-item { border-bottom: 1px dotted black; padding: 4px 0; font-family: monospace; font-size: 10px; }
     .user-search-input { width: 90%; padding: 4px; font-family: monospace; border: 2px solid black; margin-bottom: 8px; }
+
+    /* Brutalist Google Translate Override Styling Rules */
+    #google_translate_element { padding: 4px; background: white; margin: 4px; border: 1px solid black; text-align: center; }
+    .goog-te-gadget { font-family: monospace !important; font-size: 11px !important; }
+    .goog-te-gadget-simple { background-color: #fff !important; border: 1px solid #000 !important; padding: 2px !important; border-radius: 0px !important; }
+    .goog-te-banner-frame.skiptranslate { display: none !important; }
+    body { top: 0px !important; }
   </style>
 </head>
 <body>
@@ -180,7 +187,10 @@
     <table id="workspace-table">
       <tr>
         <td id="sidebar-cell">
-          <div class="panel-header">🌍 Core Spaces</div>
+          <div class="panel-header">🌐 Node Language Translation</div>
+          <div id="google_translate_element"></div>
+
+          <div class="panel-header">💬 Core Spaces</div>
           <div class="nav-item nav-item-active" id="nav-public" onclick="switchChannel('public', '')"> All of Unreader Chat</div>
           <div class="nav-item" id="nav-neighborhood" onclick="switchChannel('neighborhood', '')"> Neighborhood</div>
 
@@ -198,7 +208,7 @@
           </div>
           <div id="dm-list"></div>
 
-          <div class="panel-header">🟢 Active Users</div>
+          <div class="panel-header">👥 Active Users</div>
           <div id="roster-list"></div>
           
           <div class="panel-header">System Operations</div>
@@ -228,6 +238,17 @@
       </tr>
     </table>
   </div>
+
+  <script type="text/javascript">
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+        autoDisplay: false
+      }, 'google_translate_element');
+    }
+  </script>
+  <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 
   <script type="text/javascript">
     const DEBUG = false;
@@ -374,7 +395,7 @@
     function ensureDMNavOption(username) {
       if (document.getElementById('nav-dm-' + username) || username === myUsername) return;
       var item = document.createElement('div'); item.className = 'nav-item'; item.id = 'nav-dm-' + username;
-      item.textContent = '💬 ' + username; item.onclick = function() { switchChannel('dm', username); };
+      item.textContent = '📨 ' + username; item.onclick = function() { switchChannel('dm', username); };
       document.getElementById('dm-list').appendChild(item);
     }
 

@@ -8,6 +8,9 @@ import cors from 'cors'
 const { Pool } = pkg 
 const JWT_SECRET = process.env.JWT_SECRET || 'brutalist_secret_key_123'
 
+// Securely assign the fallback initialization credentials using environment variables
+const ADMIN_SEED_PASSWORD = process.env.ADMIN_SEED_PASSWORD || 'ChangeMe_Strict_Random_2026!';
+
 let connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/unreader';
 
 if (connectionString && !connectionString.startsWith('postgresql://') && !connectionString.startsWith('postgres://')) {
@@ -32,12 +35,14 @@ async function initDatabase() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_moderator') THEN ALTER TABLE users ADD COLUMN is_moderator BOOLEAN DEFAULT false; END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='last_ip') THEN ALTER TABLE users ADD COLUMN last_ip TEXT; END IF;
       END $$;
+    `);
 
+    // 3. Create Supporting Tables & Performance Indexes
+    await db.query(`
       CREATE TABLE IF NOT EXISTS mod_logs (
         id SERIAL PRIMARY KEY, mod_username TEXT NOT NULL, action_type TEXT NOT NULL,
         target_username TEXT, target_id INTEGER, reason TEXT, timestamp BIGINT NOT NULL
       );
-
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY, username TEXT NOT NULL, timestamp TEXT NOT NULL, content TEXT NOT NULL, 
         is_deleted BOOLEAN DEFAULT false, deleted_by TEXT
@@ -73,16 +78,50 @@ async function initDatabase() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='neighborhood_posts' AND column_name='deleted_by') THEN ALTER TABLE neighborhood_posts ADD COLUMN deleted_by TEXT; END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='neighborhood_comments' AND column_name='deleted_by') THEN ALTER TABLE neighborhood_comments ADD COLUMN deleted_by TEXT; END IF;
       END $$;
+
+      CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id DESC);
+      CREATE INDEX IF NOT EXISTS idx_topic_messages_slug ON topic_messages(topic_slug);
+      CREATE INDEX IF NOT EXISTS idx_dms_participants ON dms(sender, receiver);
     `);
-    await db.query(`UPDATE users SET is_admin = true WHERE username IN ('augustinejames', 'tockdev');`);
-    console.log("Database online. Structural migration complete.");
-  } catch (err) { console.error(err); process.exit(1); }
+    
+    // 4. Seed Admins securely using ADMIN_SEED_PASSWORD variable
+    const placeholderHash = await bcrypt.hash(ADMIN_SEED_PASSWORD, 10);
+    
+    await db.query(`
+      INSERT INTO users (username, password_hash) 
+      VALUES ('augustinejames', $1), ('tockdev', $1)
+      ON CONFLICT (username) DO NOTHING;
+    `, [placeholderHash]);
+
+    await db.query(`
+      UPDATE users SET is_admin = true WHERE username IN ('augustinejames', 'tockdev');
+    `);
+
+    await db.query(`
+      INSERT INTO profiles (username) 
+      VALUES ('augustinejames'), ('tockdev') 
+      ON CONFLICT DO NOTHING;
+    `);
+
+    console.log("Database online. Dynamic roles, seeds, and mod logs initialized.");
+  } catch (err) {
+    console.error("CRITICAL DATABASE ERROR:", err);
+    process.exit(1);
+  }
 }
 initDatabase();
 
 const app = express()
 app.set('trust proxy', true);
-app.use(cors());
+
+app.use(cors({
+  origin: ["https://tock-dev.github.io", "null"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Authorization", "Content-Type", "Origin", "Accept"],
+  credentials: true,
+  optionsSuccessStatus: 204
+}));
+
 app.use(express.json())
 
 async function getUserRoles(username) {
@@ -119,7 +158,7 @@ app.post('/api/register', async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     await db.query('INSERT INTO users (username, password_hash, last_ip) VALUES ($1, $2, $3);', [username, hash, ip]);
     await db.query('INSERT INTO profiles (username) VALUES ($1) ON CONFLICT DO NOTHING;', [username]);
-    res.json({ token: jwt.sign({ username }, JWT_SECRET), username });
+    res.json({ token: jwt.sign({ username }, JWT_SECRET, { expiresIn: '7d' }), username });
   } catch (err) { res.status(400).json({ error: 'Username already taken' }); }
 });
 
@@ -227,6 +266,19 @@ wss.on('connection', (ws, req) => {
       }
       if (!authUser) return;
 
+      const liveCheck = await db.query('SELECT is_banned, timeout_until FROM users WHERE username = $1;', [authUser]);
+      if (liveCheck.rows[0] && (liveCheck.rows[0].is_banned || BigInt(liveCheck.rows[0].timeout_until) > BigInt(Date.now()))) {
+        ws.send(JSON.stringify({ type: 'terminated' })); 
+        ws.close(); 
+        return;
+      }
+
+      if (data.type === 'create_topic') {
+        const slug = data.title.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        await db.query('INSERT INTO topics (slug, title, username, timestamp) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING;', [slug, data.title, authUser, String(Date.now())]);
+        broadcastTopics();
+      }
+
       if (['message', 'topic_message', 'dm', 'neighborhood_post', 'neighborhood_comment'].includes(data.type)) {
         const tStr = String(Date.now());
         if (data.type === 'message') await db.query('INSERT INTO messages (username, timestamp, content) VALUES ($1, $2, $3);', [authUser, tStr, data.content]);
@@ -238,9 +290,14 @@ wss.on('connection', (ws, req) => {
       }
 
       if (data.type === 'mod_delete' || data.type === 'mod_restore') {
+<<<<<<< HEAD
         const targetTable = ALLOWED_CHANNELS[data.channel] || (data.channel === 'neighborhood_comment' ? 'neighborhood_comments' : null);
-        if (!targetTable) return;
+        if (!targetTable) {
+          ws.send(JSON.stringify({ type: 'error_alert', message: 'Invalid channel structure.' }));
+		  return;
+		}
         const res = await db.query(`SELECT username, sender, deleted_by FROM ${targetTable} WHERE id = $1;`, [data.id]);
+        if (res.rows.length === 0) return;
         const target = res.rows[0];
         if (!target) return;
         const owner = target.username || target.sender;
@@ -264,17 +321,27 @@ wss.on('connection', (ws, req) => {
       if (userRoles.is_admin || userRoles.is_moderator) {
         if (data.type === 'mod_timeout') {
           const targetRoles = await getUserRoles(data.target);
-          if (targetRoles.is_admin) return ws.send(JSON.stringify({ type: 'error_alert', message: 'Unauthorized.' }));
+<<<<<<< HEAD
+          if (targetRoles.is_admin) return ws.send(JSON.stringify({ type: 'error_alert', message: 'Cannot timeout an admin.' }));
           await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (parseInt(data.duration, 10)*60*1000), data.target]);
           if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', data.target, data.reason || 'No reason', Date.now()]);
-          if(activeClients.has(data.target)) { activeClients.get(data.target).send(JSON.stringify({ type: 'terminated' })); activeClients.get(data.target).close(); }
+          if(activeClients.has(data.target)) { 
+            activeClients.get(data.target).send(JSON.stringify({ type: 'terminated', reason: 'You have been temporarily timed out by staff.' })); 
+            activeClients.get(data.target).close(); 
+          }
         }
         if (userRoles.is_admin) {
-          if (data.type === 'mod_ban') { await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [data.target]); if(activeClients.has(data.target)) activeClients.get(data.target).close(); }
-          if (data.type === 'mod_pardon') await db.query('UPDATE users SET is_banned = false, timeout_until = 0 WHERE username = $1;', [data.target]);
+          if (data.type === 'mod_ban') {
+			await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [data.target]); 
+            if(activeClients.has(data.target)) {
+              activeClients.get(data.target).send(JSON.stringify({ type: 'terminated', reason: 'Your account has been permanently banned.' }));
+              activeClients.get(data.target).close();
+            }
+		  }
+		  if (data.type === 'mod_pardon') await db.query('UPDATE users SET is_banned = false, timeout_until = 0 WHERE username = $1;', [data.target]);
         }
       }
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Socket Error:", err); }
   });
   ws.on('close', () => { if (authUser) { activeClients.delete(authUser); broadcastSystemUpdate({ type: 'roster_update', users: Array.from(activeClients.keys()) }); } });
 });
