@@ -88,22 +88,25 @@ app.post('/api/register', async (req, res) => {
     }
 })
 
+// FIXED: Database row extraction targeted accurately
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body
     try {
         const result = await db.query('SELECT * FROM users WHERE username = $1;', [username])
-        const user = result.rows[0]
+        
+        // FIXED: Extract the raw individual row profile from rows array collection map
+        var user = result.rows[0];
+        
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({ error: 'Invalid credentials' })
         }
-        const token = jwt.sign({ username }, JWT_SECRET)
-        res.json({ token, username })
+        const token = jwt.sign({ username: user.username }, JWT_SECRET)
+        res.json({ token, username: user.username })
     } catch (err) {
         res.status(500).json({ error: 'Server authentication failure' })
     }
 })
 
-// Secure Password Alteration Route Profile
 app.post('/api/change-password', async (req, res) => {
     const authHeader = req.headers.authorization;
     const { password } = req.body;
