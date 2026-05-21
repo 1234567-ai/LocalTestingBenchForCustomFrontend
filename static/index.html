@@ -60,13 +60,18 @@
 
     .boss-msg {
       float: right;
-      background-color: #ffe066 !important;
+      background: #ffe066 !important;
       border: 4px solid black !important;
       box-shadow: 4px 4px 0px #00ffff, 6px 6px 0px #000000 !important;
+      animation: neonPulse 2s infinite alternate;
     }
     .boss-meta {
       color: #7a00cc !important;
       font-weight: bold !important;
+    }
+    @keyframes neonPulse {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-2px); }
     }
 
     .del-btn {
@@ -79,8 +84,9 @@
     }
     #settings-box-container { background: #e0e0e0; border: 2px solid black; }
     .mod-input, .settings-input { width: 90%; padding: 4px; margin-bottom: 4px; font-family: monospace; font-size: 11px; }
-    .mod-btn, .settings-btn { width: 95%; font-family: monospace; font-size: 11px; font-weight: bold; background: black; color: white; cursor: pointer; padding: 4px 0; border: none; }
+    .mod-btn, .settings-btn { width: 95%; font-family: monospace; font-size: 11px; font-weight: bold; background: black; color: white; cursor: pointer; padding: 4px 0; border: none; margin-bottom: 4px; }
     .settings-btn { background: #333; }
+    #mod-unban-btn { background: green; }
 
     #auth-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: #222; display: block; z-index: 100; text-align: center; padding-top: 100px; }
     .auth-box { padding: 30px; width: 300px; margin: 0 auto; background: white; }
@@ -96,7 +102,6 @@
       <h2 id="auth-title" style="margin-top:0; text-transform:uppercase;">Login</h2>
       <input class="paper" type="text" id="auth-user" placeholder="Username" autocomplete="off">
       <input class="paper" type="password" id="auth-pass" placeholder="Password">
-      <!-- FIXED: Changed button id element attributes to prevent rendering overrides -->
       <button class="paper" id="auth-submit-btn">SUBMIT</button>
       <div id="auth-toggle" class="auth-toggle">Need to create an account? Register</div>
     </div>
@@ -125,11 +130,13 @@
           <button id="settings-save-btn" class="settings-btn">UPDATE PASSWORD</button>
         </div>
 
+        <!-- Expanded Terminal System Operator Actions Box Component -->
         <div id="mod-sidebar-panel" style="display: none;">
           <div class="panel-header" style="border-top: 2px dashed red; color: red;">SYS_OP PANEL</div>
           <div id="mod-box-container">
             <input type="text" id="mod-target-user" class="paper mod-input" placeholder="Target Username..." autocomplete="off">
-            <button id="mod-kick-btn" class="mod-btn">TERMINATE USER SESSION</button>
+            <button id="mod-ban-btn" class="mod-btn">BAN ACCOUNT</button>
+            <button id="mod-unban-btn" class="mod-btn">UNBAN ACCOUNT</button>
           </div>
         </div>
       </td>
@@ -145,8 +152,9 @@
   </table>
 
   <script type="text/javascript">
-    var BACKEND_URL = "https://unreader.onrender.com"; 
-    var WS_URL = "wss://unreader.onrender.com";
+    // ⚠️ CONFIGURATION TARGET: RE-PASTE YOUR LIVE SERVICE RENDER DOMAIN STRING VALUES HERE
+    var BACKEND_URL = "https://onrender.com"; 
+    var WS_URL = "wss://://onrender.com";
 
     var token = localStorage.getItem('token');
     var myUsername = localStorage.getItem('username');
@@ -167,7 +175,6 @@
       return name === 'augustinejames' || name === 'tockdev';
     }
 
-    // FIXED: Form element variables mapped precisely to separate IDs
     document.getElementById('auth-submit-btn').onclick = function() {
       var username = document.getElementById('auth-user').value.trim();
       var password = document.getElementById('auth-pass').value;
@@ -180,9 +187,11 @@
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
+          if (xhr.status >= 400) {
+            var errData = JSON.parse(xhr.responseText);
+            return alert(errData.error || 'Authentication rejected.');
+          }
           var data = JSON.parse(xhr.responseText);
-          if(data.error) return alert(data.error);
-          
           localStorage.setItem('token', data.token);
           localStorage.setItem('username', data.username);
           token = data.token;
@@ -205,7 +214,6 @@
         if (xhr.readyState === 4) {
           var data = JSON.parse(xhr.responseText);
           if (data.error) return alert(data.error);
-          
           document.getElementById('settings-new-pass').value = '';
           alert('Password profile systematically modified successfully!');
         }
@@ -227,23 +235,23 @@
       }
       
       socket = new WebSocket(WS_URL);
-      
       socket.onopen = function() { socket.send(JSON.stringify({ type: 'auth', token: token })); };
 
       socket.onmessage = function(event) {
         var data = JSON.parse(event.data);
         
         if (data.type === 'terminated') {
-          alert('Your session was terminated by an administrator.');
+          alert('Your session was terminated. Reason: Account Status Mutation/Ban.');
           localStorage.clear();
           window.location.reload();
           return;
         }
 
+        // FIXED: Deletes the entire visual shell card element from the domestic view matrix completely
         if (data.type === 'msg_deleted') {
-          var targetNode = document.getElementById('msg-id-' + data.id);
-          if (targetNode) {
-            targetNode.innerHTML = '<div class="message-meta">System</div><div class="message-text">[MESSAGE PURGED BY ROOT]</div>';
+          var targetWrapper = document.getElementById('msg-wrapper-id-' + data.id);
+          if (targetWrapper) {
+            targetWrapper.parentNode.removeChild(targetWrapper);
           }
           return;
         }
@@ -269,29 +277,26 @@
       loadHistory();
     }
 
-    document.getElementById('mod-kick-btn').onclick = function() {
+    // Bind administrative button events dynamically
+    document.getElementById('mod-ban-btn').onclick = function() { executeModAction('mod_ban'); };
+    document.getElementById('mod-unban-btn').onclick = function() { executeModAction('mod_unban'); };
+
+    function executeModAction(typeString) {
       var target = document.getElementById('mod-target-user').value.trim();
       if (!target) return alert('Enter a target user string');
-      if (isMasterAdmin(target)) return alert('Operation Aborted: Cannot terminate root profiles');
+      if (isMasterAdmin(target)) return alert('Operation Denied: Target profile matches active operator profiles.');
       
       if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 'mod_kick',
-          target: target
-        }));
+        socket.send(JSON.stringify({ type: typeString, target: target }));
         document.getElementById('mod-target-user').value = '';
-        alert('Termination order broadcasted for: ' + target);
+        alert('Action (' + typeString + ') synchronized for: ' + target);
       }
-    };
+    }
 
     function triggerMsgDeletion(msgId) {
       if (!isMasterAdmin(myUsername)) return;
       if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 'mod_delete',
-          id: msgId,
-          channel: currentMode
-        }));
+        socket.send(JSON.stringify({ type: 'mod_delete', id: msgId, channel: currentMode }));
       }
     }
 
@@ -371,8 +376,10 @@
       var containerDiv = document.createElement('div');
       containerDiv.className = 'message-container';
       
+      // FIXED: Maps unique wrapper IDs to safely target layout deletion scripts
+      containerDiv.id = 'msg-wrapper-id-' + data.id;
+      
       var msgDiv = document.createElement('div');
-      msgDiv.id = 'msg-id-' + data.id;
       var isMe = data.username === myUsername;
       var isBoss = isMasterAdmin(data.username);
       
@@ -419,40 +426,3 @@
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4 && xhr.status === 200) {
           var data = JSON.parse(xhr.responseText);
-          for (var i = 0; i < data.length; i++) {
-            var msg = data[i];
-            if (currentMode === 'public') {
-              appendMessage(msg);
-            } else {
-              appendMessage({ id: msg.id, username: msg.sender, content: msg.content, timestamp: msg.timestamp });
-            }
-          }
-        }
-      };
-      xhr.send();
-    }
-
-    var input = document.getElementById('content');
-    input.oninput = function() {
-        if (currentMode === 'dm' && socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: 'typing', target: currentDMTarget }));
-        }
-    };
-
-    function sendMessage() {
-      var text = input.value.trim();
-      if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify({ type: currentMode, content: text, target: currentDMTarget }));
-      input.value = '';
-    }
-
-    document.getElementById('send').onclick = sendMessage;
-    input.onkeypress = function(e) {
-      var key = e.keyCode || e.which;
-      if (key === 13) sendMessage();
-    };
-
-    if (token && myUsername) initApp();
-  </script>
-</body>
-</html>
