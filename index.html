@@ -3,7 +3,7 @@
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-  <title>KindleChat</title>
+  <title>un-reader</title>
   <style type="text/css">
     /* SYSTEM 7 HIGH-CONTRAST E-INK AESTHETICS */
     :root {
@@ -120,7 +120,7 @@
     <div class="title-bar">
       <div class="title-stripes"></div>
       <button id="logout-btn">LOGOUT</button>
-      <div class="title-text">KindleChat</div>
+      <div class="title-text">un-reader</div>
       <span id="user-display"></span>
     </div>
     
@@ -144,7 +144,6 @@
           </div>
         </td>
         <td id="chat-cell">
-          <!-- Static Snap Navigation Header Desk Bar for E-Ink Refresh Sync -->
           <div id="pagination-header-bar">
             <button class="page-btn" id="prev-page-btn" onclick="jumpToPreviousPage()">&lt; NEWER LOGS</button>
             <span id="page-display-index">PAGE: 0</span>
@@ -164,9 +163,9 @@
   </div>
 
   <script type="text/javascript">
-    // ⚠️ CONFIGURATION TARGET: REPLACE BOTH URLS BELOW WITH YOUR RENDER APP ADDRESS BEFORE GIT ACTIONS
-    var BACKEND_URL = "https://unreader.onrender.com"; 
-    var WS_URL = "wss://unreader.onrender.com";
+    // ⚠️ CONFIGURATION TARGET: REPLACE BOTH URLS BELOW WITH YOUR RENDER APP ADDRESS
+    var BACKEND_URL = "https://onrender.com"; 
+    var WS_URL = "wss://://onrender.com";
 
     var token = localStorage.getItem('token');
     var myUsername = localStorage.getItem('username');
@@ -260,7 +259,8 @@
         }
         
         if (currentHistoryIndex === 0) {
-          if (data.type === 'public' && currentMode === 'public') {
+          // FIXED: Now matches server variable properties ('message' vs 'public')
+          if (data.type === 'message' && currentMode === 'public') {
             loadHistory();
           } else if (data.type === 'dm') {
             var partner = data.sender === myUsername ? data.receiver : data.sender;
@@ -463,7 +463,15 @@
     function sendMessage() {
       var text = input.value.trim();
       if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify({ type: currentMode === 'public' ? 'public' : 'dm', content: text, target: currentDMTarget }));
+      
+      // FIXED: Packages data arrays correctly to match index.js parameters
+      var payload = {
+        type: currentMode === 'public' ? 'message' : 'dm',
+        content: text,
+        target: currentDMTarget
+      };
+      
+      socket.send(JSON.stringify(payload));
       input.value = '';
     }
 
