@@ -10,7 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'brutalist_secret_key_123'
 const DO_LOGGING = true;
 
 function log(...args) {
-  if (DO_LOGGING) console.log(`[${new Date().toISOString()}]`, ...args);
+  if (DO_LOGGING) console.log(`[SERVER]`, ...args);
 }
 
 let connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/unreader';
@@ -24,7 +24,7 @@ const db = new Pool({ connectionString })
 
 async function initDatabase() {
   try {
-    log("Initializing database structure...");
+    log("Verifying structural integrity...");
     await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, 
@@ -79,8 +79,8 @@ async function initDatabase() {
       END $$;
     `);
     await db.query(`UPDATE users SET is_admin = true WHERE username IN ('augustinejames', 'tockdev');`);
-    log("Database structure verification complete.");
-  } catch (err) { log("CRITICAL DB INIT ERROR:", err); process.exit(1); }
+    log("Structural migration successful.");
+  } catch (err) { log("DB MIGRATION FAILURE:", err); process.exit(1); }
 }
 initDatabase();
 
@@ -104,7 +104,7 @@ async function authenticateToken(req, res, next) {
     req.user = { ...decoded, ...roles };
     next();
   } catch (err) { 
-    log("Auth Token error:", err.message);
+    log("Auth Token verification failed:", err.message);
     return res.status(403).json({ error: 'Invalid token' }); 
   }
 }
@@ -116,7 +116,7 @@ function broadcastSystemUpdate(payloadObj) {
     if(c.readyState === WebSocket.OPEN) {
         c.send(msgStr); 
     } else {
-        log(`Pruning stale WS connection for ${username}`);
+        log(`Pruning inactive connection: ${username}`);
         activeClients.delete(username);
     }
   });
@@ -130,14 +130,14 @@ app.get('/dm-contacts', authenticateToken, async (req, res) => {
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  log(`Registration request for ${username} from IP ${ip}`);
+  log(`Registration request: ${username} from ${ip}`);
   try {
     const hash = await bcrypt.hash(password, 10);
     await db.query('INSERT INTO users (username, password_hash, last_ip) VALUES ($1, $2, $3);', [username, hash, ip]);
     await db.query('INSERT INTO profiles (username) VALUES ($1) ON CONFLICT DO NOTHING;', [username]);
     res.json({ token: jwt.sign({ username }, JWT_SECRET), username });
   } catch (err) { 
-    log("Registration error:", err.message);
+    log("Registration collision/error:", err.message);
     res.status(400).json({ error: 'Username already taken' }); 
   }
 });
@@ -145,7 +145,7 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  log(`Login attempt for ${username} from IP ${ip}`);
+  log(`Login request: ${username} from ${ip}`);
   try {
     const result = await db.query('SELECT * FROM users WHERE username = $1;', [username]);
     const user = result.rows[0];
@@ -154,10 +154,10 @@ app.post('/api/login', async (req, res) => {
         return res.status(401).json({ error: 'Rejected' });
     }
     await db.query('UPDATE users SET last_ip = $1 WHERE username = $2;', [ip, username]);
-    log(`Login SUCCESS for ${username}`);
+    log(`Login SUCCESS: ${username}`);
     res.json({ token: jwt.sign({ username }, JWT_SECRET), username });
   } catch (err) {
-    log("Login processing error:", err.message);
+    log("Login logic breakdown:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -182,7 +182,7 @@ app.get('/api/mod-logs', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/find-user/:username', authenticateToken, async (req, res) => {
   if (!req.user.is_admin && !req.user.is_moderator) return res.status(403).json({ error: 'Unauthorized' });
-  log(`Admin ${req.user.username} searching for user: ${req.params.username}`);
+  log(`Admin User-Search: target=${req.params.username} by=${req.user.username}`);
   const r = await db.query('SELECT username, last_ip, timeout_until, is_banned, is_admin, is_moderator FROM users WHERE username = $1;', [req.params.username]);
   if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
   res.json(r.rows[0]);
@@ -191,7 +191,7 @@ app.get('/api/admin/find-user/:username', authenticateToken, async (req, res) =>
 app.post('/api/admin/set-role', authenticateToken, async (req, res) => {
   if (!req.user.is_admin) return res.status(403).json({ error: 'Unauthorized' });
   const { target, is_moderator } = req.body;
-  log(`Admin ${req.user.username} setting role for ${target}: mod=${is_moderator}`);
+  log(`Role Assignment: ${target} -> mod=${is_moderator} by=${req.user.username}`);
   await db.query('UPDATE users SET is_moderator = $1 WHERE username = $2;', [is_moderator, target]);
   res.json({ success: true });
 });
@@ -204,7 +204,8 @@ app.get('/history', authenticateToken, async (req, res) => {
 
 app.get('/dm-history', authenticateToken, async (req, res) => {
   const off = parseInt(req.query.index ?? '0', 10) * 10;
-  const r = await db.query(`SELECT d.*, u.is_admin, u.is_moderator FROM dms d LEFT JOIN users u ON d.sender = u.username WHERE (sender = $1 AND receiver = $2) OR (sender = $2 AND receiver = $1) ORDER BY d.id DESC LIMIT 10 OFFSET $3;`, [req.user.username, req.query.target, off]);
+  // ALIAS sender AS username for frontend naming consistency
+  const r = await db.query(`SELECT d.*, d.sender AS username, u.is_admin, u.is_moderator FROM dms d LEFT JOIN users u ON d.sender = u.username WHERE (sender = $1 AND receiver = $2) OR (sender = $2 AND receiver = $1) ORDER BY d.id DESC LIMIT 10 OFFSET $3;`, [req.user.username, req.query.target, off]);
   res.json(r.rows.reverse());
 });
 
@@ -228,7 +229,7 @@ app.get('/neighborhood-history', authenticateToken, async (req, res) => {
   res.json(posts.rows.reverse());
 });
 
-const server = app.listen(process.env.PORT || 10000, '0.0.0.0', () => log(`Server listening on ${process.env.PORT || 10000}`));
+const server = app.listen(process.env.PORT || 10000, '0.0.0.0', () => log(`Node strictly bound to port: ${process.env.PORT || 10000}`));
 const wss = new WebSocketServer({ server });
 
 const ALLOWED_CHANNELS = { 'public': 'messages', 'topic': 'topic_messages', 'neighborhood': 'neighborhood_posts', 'dm': 'dms', 'comment': 'neighborhood_comments', 'neighborhood_comment': 'neighborhood_comments' };
@@ -236,7 +237,6 @@ const ALLOWED_CHANNELS = { 'public': 'messages', 'topic': 'topic_messages', 'nei
 wss.on('connection', (ws, req) => {
   let authUser = null;
   let userRoles = { is_admin: false, is_moderator: false };
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
   ws.on('message', async (msg) => {
     try {
@@ -246,17 +246,16 @@ wss.on('connection', (ws, req) => {
           const decoded = jwt.verify(data.token, JWT_SECRET);
           authUser = decoded.username;
           userRoles = await getUserRoles(authUser);
-          log(`WebSocket Auth attempt for ${authUser} (Admin: ${userRoles.is_admin}, Mod: ${userRoles.is_moderator})`);
+          log(`WS Auth Session Established: ${authUser} (Admin: ${userRoles.is_admin}, Mod: ${userRoles.is_moderator})`);
           if (userRoles.is_banned || BigInt(userRoles.timeout_until) > BigInt(Date.now())) {
-            log(`WS REJECTED for ${authUser}: Banned or Timed out`);
+            log(`WS Termination Triggered: Banned or Timed out user session`);
             ws.send(JSON.stringify({ type: 'terminated' })); ws.close(); return;
           }
           activeClients.set(authUser, ws);
           broadcastSystemUpdate({ type: 'roster_update', users: Array.from(activeClients.keys()) });
           const topicsRes = await db.query('SELECT * FROM topics ORDER BY id DESC;');
           ws.send(JSON.stringify({ type: 'topics_update', topics: topicsRes.rows, user_roles: userRoles }));
-          log(`WS authenticated: ${authUser}`);
-        } catch (e) { log("WS Auth Error:", e.message); ws.send(JSON.stringify({ type: 'terminated' })); }
+        } catch (e) { log("WS Authentication Invalid:", e.message); ws.send(JSON.stringify({ type: 'terminated' })); }
         return;
       }
       if (!authUser) return;
@@ -273,17 +272,17 @@ wss.on('connection', (ws, req) => {
 
       if (data.type === 'mod_delete' || data.type === 'mod_restore') {
         const targetTable = ALLOWED_CHANNELS[data.channel];
-        log(`MOD ACTION: type=${data.type}, channel=${data.channel}, targetTable=${targetTable}, id=${data.id}, by=${authUser}`);
+        log(`MOD PACKET: action=${data.type}, targetSpace=${data.channel}, table=${targetTable}, id=${data.id}`);
         
         if (!targetTable) {
-            log(`ERROR: Invalid channel ${data.channel}`);
+            log(`CRITICAL: Infrastructure target space undefined for channel ${data.channel}`);
             return;
         }
         
         const res = await db.query(`SELECT username, sender, deleted_by FROM ${targetTable} WHERE id = $1;`, [data.id]);
         const targetObj = res.rows[0];
         if (!targetObj) {
-            log(`ERROR: Message ID ${data.id} not found in ${targetTable}`);
+            log(`CRITICAL: ID ${data.id} not tracked in ${targetTable}`);
             return;
         }
         const owner = targetObj.username || targetObj.sender;
@@ -293,28 +292,28 @@ wss.on('connection', (ws, req) => {
         const canDelete = isOwner || userRoles.is_admin || userRoles.is_moderator;
 
         if (data.type === 'mod_delete' && canDelete) {
-          log(`EXCUTING PURGE: id=${data.id} in ${targetTable}`);
+          log(`EXECUTING DATA PURGE: targetId=${data.id} in ${targetTable} by=${authUser}`);
           await db.query(`UPDATE ${targetTable} SET is_deleted = true, deleted_by = $1 WHERE id = $2;`, [authUser, data.id]);
           if (!isOwner && userRoles.is_moderator && !userRoles.is_admin) {
-            await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, target_id, reason, timestamp) VALUES ($1, $2, $3, $4, $5, $6);', [authUser, 'delete', owner, data.id, data.reason || 'No reason', Date.now()]);
+            await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, target_id, reason, timestamp) VALUES ($1, $2, $3, $4, $5, $6);', [authUser, 'delete', owner, data.id, data.reason || 'No reason provided', Date.now()]);
           }
           broadcastSystemUpdate({ type: 'refresh_feed' });
         } else if (data.type === 'mod_restore' && canUndo) {
-          log(`EXCUTING RESTORE: id=${data.id} in ${targetTable}`);
+          log(`EXECUTING DATA RESTORE: targetId=${data.id} in ${targetTable} by=${authUser}`);
           await db.query(`UPDATE ${targetTable} SET is_deleted = false, deleted_by = NULL WHERE id = $2;`, [data.id]);
           broadcastSystemUpdate({ type: 'refresh_feed' });
         } else {
-            log(`MOD ACTION DENIED: canDelete=${canDelete}, canUndo=${canUndo}`);
+            log(`MOD ACTION REJECTED: Access level mismatch or ownership collision`);
         }
       }
 
       if (userRoles.is_admin || userRoles.is_moderator) {
         if (data.type === 'mod_timeout') {
           const targetRoles = await getUserRoles(data.target);
-          if (targetRoles.is_admin) return ws.send(JSON.stringify({ type: 'error_alert', message: 'Unauthorized.' }));
-          log(`MOD TIMEOUT: target=${data.target}, duration=${data.duration}, by=${authUser}`);
+          if (targetRoles.is_admin) return ws.send(JSON.stringify({ type: 'error_alert', message: 'System operator immunity detected.' }));
+          log(`USER TIMEOUT: target=${data.target}, duration=${data.duration}m, by=${authUser}`);
           await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (parseInt(data.duration, 10)*60*1000), data.target]);
-          if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', data.target, data.reason || 'No reason', Date.now()]);
+          if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', data.target, data.reason || 'No reason provided', Date.now()]);
           if(activeClients.has(data.target)) { activeClients.get(data.target).send(JSON.stringify({ type: 'terminated' })); activeClients.get(data.target).close(); }
         }
         if (userRoles.is_admin) {
@@ -329,7 +328,7 @@ wss.on('connection', (ws, req) => {
           }
         }
       }
-    } catch (err) { log("WS message error:", err.message); }
+    } catch (err) { log("WS Infrastructure Logic Failure:", err.message); }
   });
-  ws.on('close', () => { if (authUser) { log(`WS closed for ${authUser}`); activeClients.delete(authUser); broadcastSystemUpdate({ type: 'roster_update', users: Array.from(activeClients.keys()) }); } });
+  ws.on('close', () => { if (authUser) { log(`WS Terminal closed: ${authUser}`); activeClients.delete(authUser); broadcastSystemUpdate({ type: 'roster_update', users: Array.from(activeClients.keys()) }); } });
 });

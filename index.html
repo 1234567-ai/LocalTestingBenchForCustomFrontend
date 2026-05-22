@@ -263,7 +263,7 @@
 
     function toggleModMode() {
       modModeActive = !modModeActive;
-      log("Toggling mod mode:", modModeActive);
+      log("Mod mode toggle active:", modModeActive);
       var btn = document.getElementById('mod-mode-btn');
       btn.textContent = modModeActive ? "MOD MODE: ACTIVE" : "MOD MODE: OFF";
       btn.className = modModeActive ? "mod-indicator-btn mod-indicator-active" : "mod-indicator-btn";
@@ -272,7 +272,7 @@
 
     document.getElementById('auth-toggle').onclick = function() {
       isRegisterMode = !isRegisterMode;
-      log("Toggling auth mode. isRegisterMode:", isRegisterMode);
+      log("Auth mode shifted. isRegisterMode:", isRegisterMode);
       document.getElementById('auth-title').textContent = isRegisterMode ? 'REGISTER' : 'LOGIN';
       this.textContent = isRegisterMode ? 'Already have an account? Login' : 'Need an account? Register';
     };
@@ -282,24 +282,23 @@
       var password = document.getElementById('auth-pass').value;
       if(!username || !password) return alert('Fill in all log credentials.');
       var url = isRegisterMode ? '/api/register' : '/api/login';
-      log("Auth Submit. url:", url, "username:", username);
+      log("Sending auth packet. endpoint:", url);
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + url, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
-          log("Auth XHR state 4. status:", xhr.status);
+          log("Auth packet response code:", xhr.status);
           if (xhr.status === 200) {
             try {
               var data = JSON.parse(xhr.responseText);
-              log("Auth success. user:", data.username);
               localStorage.setItem('token', data.token);
               localStorage.setItem('username', data.username);
               token = data.token; myUsername = data.username;
               initApp();
-            } catch(e) { log("JSON error:", e); alert("Server returned an invalid packet signature."); }
+            } catch(e) { log("Auth JSON parse breakdown:", e); alert("Server returned an invalid packet signature."); }
           } else {
-            log("Auth error response:", xhr.responseText);
+            log("Auth error buffer:", xhr.responseText);
             try {
               var errData = JSON.parse(xhr.responseText);
               alert("Server error: " + (errData.error || "Access Denied"));
@@ -311,37 +310,37 @@
     };
 
     document.getElementById('logout-btn').onclick = function() { 
-      log("Logging out.");
+      log("User-initiated logout protocol.");
       localStorage.clear(); window.location.reload(); 
     };
 
     function initApp() {
-      log("Initializing app.");
+      log("Initializing core application.");
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('user-display').textContent = '@' + myUsername;
       
       if (socket) { try { socket.close(); } catch(e){} }
-      log("Opening WebSocket at:", WS_URL);
+      log("Opening WS link:", WS_URL);
       socket = new WebSocket(WS_URL);
       socket.onopen = function() { 
-        log("WS Open. Sending auth.");
+        log("WS Link established. Broadcasting auth token.");
         socket.send(JSON.stringify({ type: 'auth', token: token })); 
       };
       socket.onmessage = function(event) {
         var data = JSON.parse(event.data);
-        log("WS Message received:", data.type);
+        log("Packet received:", data.type);
         if (data.type === 'terminated') {
           alert(data.reason || 'Session expired.');
           localStorage.clear(); window.location.reload(); return;
         }
         if (data.type === 'error_alert') { alert(data.message); return; }
-        if (data.type === 'refresh_feed') { loadHistory(); return; }
+        if (data.type === 'refresh_feed') { log("Feed refresh broadcast received."); loadHistory(); return; }
         if (data.type === 'roster_update') { renderUserRoster(data.users); return; }
         if (data.type === 'topics_update') { 
           renderTopicList(data.topics);
           if (data.user_roles) {
             userRoles = data.user_roles;
-            log("Updating user roles:", userRoles);
+            log("Role permissions sync:", userRoles);
             if (userRoles.is_admin || userRoles.is_moderator) {
               document.getElementById('mod-toggle-container').style.display = 'block';
             }
@@ -379,7 +378,7 @@
     }
 
     function loadDMContacts() {
-      log("Loading DM contacts.");
+      log("Syncing DM thread contacts.");
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/dm-contacts', true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
@@ -408,14 +407,14 @@
       var inp = document.getElementById('topic-target-input');
       var title = inp.value.trim(); if(!title) return;
       if(socket && socket.readyState === WebSocket.OPEN) {
-        log("WS Send: create_topic", title);
+        log("Broadcasting topic creation packet.");
         socket.send(JSON.stringify({ type: 'create_topic', title: title }));
       }
       inp.value = '';
     }
 
     function switchChannel(mode, target) {
-      log("Switching channel. mode:", mode, "target:", target);
+      log("Channel switch initiated. mode:", mode, "target:", target);
       currentMode = mode; currentTarget = target || ''; currentHistoryIndex = 0;
       var items = document.getElementsByClassName('nav-item');
       for (var i=0; i<items.length; i++) items[i].className = 'nav-item';
@@ -441,7 +440,7 @@
     }
 
     function appendMessage(data) {
-      log("Appending message:", data.id, "roles:", {admin: data.is_admin, mod: data.is_moderator});
+      log("Appending message payload. id:", data.id, "roles:", {a: data.is_admin, m: data.is_moderator});
       var chatWrapper = document.getElementById('chat-scroll-wrapper');
       var containerDiv = document.createElement('div'); containerDiv.className = 'message-container';
       var msgDiv = document.createElement('div'); msgDiv.id = 'msg-id-' + data.id;
@@ -483,7 +482,7 @@
     }
 
     function appendNeighborhoodPost(data) {
-      log("Appending post:", data.id);
+      log("Appending neighborhood post entry:", data.id);
       var chatWrapper = document.getElementById('chat-scroll-wrapper');
       var box = document.createElement('div'); box.className = 'nb-post-box';
       box.id = 'nb-post-' + data.id;
@@ -524,7 +523,7 @@
                 (function(cid) { cDel.onclick = function() { 
                   var r = prompt("Reason?");
                   if(r !== null) {
-                    log("WS Send: mod_delete comment", cid);
+                    log("Broadcasting moderator delete packet for comment:", cid);
                     socket.send(JSON.stringify({ type: 'mod_delete', id: cid, channel: 'neighborhood_comment', reason: r })); 
                   }
                 }; })(c.id);
@@ -548,7 +547,7 @@
       var inp = document.getElementById('input-comment-for-' + postId);
       var text = inp.value.trim(); if(!text) return;
       if(socket && socket.readyState === WebSocket.OPEN) {
-        log("WS Send: neighborhood_comment", postId);
+        log("Broadcasting comment packet for post:", postId);
         socket.send(JSON.stringify({ type: 'neighborhood_comment', post_id: postId, content: text }));
       }
       inp.value = '';
@@ -570,7 +569,7 @@
         if (userRoles.is_admin || (userRoles.is_moderator && data.deleted_by === myUsername)) {
           var rBtn = document.createElement('button'); rBtn.className = 'mod-tray-btn'; rBtn.textContent = 'RESTORE';
           rBtn.onclick = function() { 
-            log("WS Send: mod_restore", data.id);
+            log("Broadcasting restoration packet for id:", data.id);
             sendModAction('mod_restore', data.id); 
           };
           trayDiv.appendChild(rBtn);
@@ -580,7 +579,7 @@
     }
 
     function sendModAction(type, id, reason) {
-      log("Mod Action:", type, "id:", id, "channel:", currentMode);
+      log("Dispatching moderator packet. action:", type, "targetSpace:", currentMode);
       socket.send(JSON.stringify({ type: type, id: id, channel: currentMode, reason: reason }));
     }
 
@@ -590,7 +589,7 @@
     }
 
     function loadHistory() {
-      log("Loading history. mode:", currentMode, "index:", currentHistoryIndex);
+      log("Requesting history payload. space:", currentMode, "index:", currentHistoryIndex);
       var wrapper = document.getElementById('chat-scroll-wrapper'); wrapper.innerHTML = '';
       var xhr = new XMLHttpRequest();
       var endpoint = '/history?index=';
@@ -601,7 +600,7 @@
       if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4 && xhr.status === 200) {
-          log("History loaded.");
+          log("History payload synced.");
           var data = JSON.parse(xhr.responseText);
           document.getElementById('page-display-index').textContent = "PAGE: " + currentHistoryIndex;
           for (var i = 0; i < data.length; i++) {
@@ -623,7 +622,7 @@
         socket.send(JSON.stringify({ type: 'neighborhood_post', title: titleText, content: text }));
         tInput.value = '';
       } else {
-        log("WS Send message. mode:", currentMode);
+        log("Dispatching message packet. target:", currentTarget);
         socket.send(JSON.stringify({ type: currentMode === 'public' ? 'message' : (currentMode === 'topic' ? 'topic_message' : 'dm'), content: text, target: currentTarget }));
       }
       input.value = '';
@@ -643,7 +642,7 @@
     };
 
     function openProfileModal(targetUser) {
-      log("Opening profile for:", targetUser);
+      log("Requesting profile metadata. target:", targetUser);
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/api/profile/' + targetUser, true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
@@ -656,7 +655,7 @@
     }
 
     function showProfileInModal(p) {
-      log("Showing profile in modal. roles:", {admin: p.is_admin, mod: p.is_moderator});
+      log("Displaying profile in modal overlay.");
       document.getElementById('profile-view').style.display = 'block';
       document.getElementById('mod-log-view').style.display = 'none';
       document.getElementById('user-search-view').style.display = 'none';
@@ -707,7 +706,7 @@
     }
 
     function openModLogs() {
-      log("Opening Mod Logs.");
+      log("Requesting moderator action logs.");
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/api/mod-logs', true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
@@ -728,7 +727,7 @@
     }
 
     function openUserSearch() {
-      log("Opening User Search.");
+      log("Accessing administrative user search tool.");
       document.getElementById('profile-view').style.display = 'none';
       document.getElementById('mod-log-view').style.display = 'none';
       document.getElementById('user-search-view').style.display = 'block';
@@ -739,12 +738,13 @@
     function searchUserAction() {
       var target = document.getElementById('user-search-input').value.trim();
       if (!target) return;
-      log("Searching for user:", target);
+      log("Dispatched user lookup. target:", target);
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/api/admin/find-user/' + target, true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
           var res = document.getElementById('user-search-results');
+          log("User lookup response status:", xhr.status);
           if (xhr.status === 200) {
             var u = JSON.parse(xhr.responseText);
             var status = u.is_banned ? 'BANNED' : (BigInt(u.timeout_until) > BigInt(Date.now()) ? 'TIMED OUT' : 'ACTIVE');
@@ -761,14 +761,14 @@
             }
             html += `</div>`;
             res.innerHTML = html;
-          } else { res.innerHTML = 'User not found.'; }
+          } else { res.innerHTML = 'User not found in system records.'; }
         }
       };
       xhr.send();
     }
 
     function setModeratorAction(target, isMod) {
-      log("Setting mod status for:", target, "isMod:", isMod);
+      log("Dispatching role update packet. target:", target, "mod:", isMod);
       var xhr = new XMLHttpRequest(); xhr.open('POST', BACKEND_URL + '/api/admin/set-role', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
@@ -777,7 +777,7 @@
     }
 
     function adminAction(type, target) {
-      log("Admin Action:", type, "on:", target);
+      log("Dispatching admin WS action:", type, "target:", target);
       socket.send(JSON.stringify({ type: type, target: target }));
       setTimeout(searchUserAction, 500);
     }
@@ -788,7 +788,7 @@
       var av = document.getElementById('edit-avatar').value.trim();
       var loc = document.getElementById('edit-location').value.trim();
       var bio = document.getElementById('edit-bio').value.trim();
-      log("Saving profile changes.");
+      log("Dispatching profile update packet.");
       var xhr = new XMLHttpRequest(); xhr.open('POST', BACKEND_URL + '/api/profile', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
@@ -800,7 +800,7 @@
       var currentPass = document.getElementById('change-pass-current').value;
       var newPass = document.getElementById('change-pass-new').value;
       if (!currentPass || !newPass) return alert('Please fill out both password fields.');
-      log("Submitting password change.");
+      log("Dispatching security parameter update packet.");
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + '/api/change-password', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
