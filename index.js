@@ -13,6 +13,7 @@ function log(...args) {
   if (DO_LOGGING) console.log(`[SERVER]`, ...args);
 }
 
+// CORRECT RELEASE URL
 let connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/unreader';
 
 if (connectionString && !connectionString.startsWith('postgresql://') && !connectionString.startsWith('postgres://')) {
@@ -204,8 +205,14 @@ app.get('/history', authenticateToken, async (req, res) => {
 
 app.get('/dm-history', authenticateToken, async (req, res) => {
   const off = parseInt(req.query.index ?? '0', 10) * 10;
-  // ALIAS sender AS username for frontend naming consistency
-  const r = await db.query(`SELECT d.*, d.sender AS username, u.is_admin, u.is_moderator FROM dms d LEFT JOIN users u ON d.sender = u.username WHERE (sender = $1 AND receiver = $2) OR (sender = $2 AND receiver = $1) ORDER BY d.id DESC LIMIT 10 OFFSET $3;`, [req.user.username, req.query.target, off]);
+  // FIX: Force ALIAS and explicit join for name consistency
+  const r = await db.query(`
+    SELECT d.id, d.sender AS username, d.receiver, d.timestamp, d.content, d.is_deleted, d.deleted_by, u.is_admin, u.is_moderator 
+    FROM dms d 
+    LEFT JOIN users u ON d.sender = u.username 
+    WHERE (d.sender = $1 AND d.receiver = $2) OR (d.sender = $2 AND d.receiver = $1) 
+    ORDER BY d.id DESC LIMIT 10 OFFSET $3;
+  `, [req.user.username, req.query.target, off]);
   res.json(r.rows.reverse());
 });
 
