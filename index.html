@@ -95,8 +95,8 @@
     .comment-item { font-size: 11px; padding: 4px 6px; border-bottom: 1px dotted #ccc; background: white; margin-bottom: 2px; }
 
     #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.2); display: none; z-index: 2000; }
-    .info-window { position: absolute; top: 15%; left: 50%; transform: translate(-50%, 0); width: 340px; background: white; border: 2px solid black; box-shadow: var(--shadow); }
-    .info-body { padding: 12px; font-size: 12px; max-height: 70vh; overflow-y: auto; }
+    .info-window { position: absolute; top: 10%; left: 50%; transform: translate(-50%, 0); width: 340px; background: white; border: 2px solid black; box-shadow: var(--shadow); }
+    .info-body { padding: 12px; font-size: 12px; max-height: 80vh; overflow-y: auto; }
 
     #auth-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.3); display: block; z-index: 3000; text-align: center; padding-top: 100px; }
     .auth-box { padding: 24px; width: 280px; margin: 0 auto; background: white; border: 2px solid black; box-shadow: var(--shadow); }
@@ -105,13 +105,6 @@
     
     .mod-log-item { border-bottom: 1px dotted black; padding: 4px 0; font-family: monospace; font-size: 10px; }
     .user-search-input { width: 90%; padding: 4px; font-family: monospace; border: 2px solid black; margin-bottom: 8px; }
-
-    /* Brutalist Google Translate Override Styling Rules */
-    #google_translate_element { padding: 4px; background: white; margin: 4px; border: 1px solid black; text-align: center; }
-    .goog-te-gadget { font-family: monospace !important; font-size: 11px !important; }
-    .goog-te-gadget-simple { background-color: #fff !important; border: 1px solid #000 !important; padding: 2px !important; border-radius: 0px !important; }
-    .goog-te-banner-frame.skiptranslate { display: none !important; }
-    body { top: 0px !important; }
   </style>
 </head>
 <body>
@@ -187,10 +180,7 @@
     <table id="workspace-table">
       <tr>
         <td id="sidebar-cell">
-          <div class="panel-header">🌐 Node Language Translation</div>
-          <div id="google_translate_element"></div>
-
-          <div class="panel-header">💬 Core Spaces</div>
+          <div class="panel-header">🌍 Core Spaces</div>
           <div class="nav-item nav-item-active" id="nav-public" onclick="switchChannel('public', '')"> All of Unreader Chat</div>
           <div class="nav-item" id="nav-neighborhood" onclick="switchChannel('neighborhood', '')"> Neighborhood</div>
 
@@ -208,7 +198,7 @@
           </div>
           <div id="dm-list"></div>
 
-          <div class="panel-header">👥 Active Users</div>
+          <div class="panel-header">🟢 Active Users</div>
           <div id="roster-list"></div>
           
           <div class="panel-header">System Operations</div>
@@ -240,20 +230,10 @@
   </div>
 
   <script type="text/javascript">
-    function googleTranslateElementInit() {
-      new google.translate.TranslateElement({
-        pageLanguage: 'en',
-        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
-        autoDisplay: false
-      }, 'google_translate_element');
-    }
-  </script>
-  <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-
-  <script type="text/javascript">
     const DEBUG = false;
-    var BACKEND_URL = DEBUG ? "http://localhost:3000" : "https://unreader.onrender.com"; 
-    var WS_URL = DEBUG ? "ws://localhost:3000" : "wss://unreader.onrender.com";
+    const DO_LOGGING = true;
+    var BACKEND_URL = DEBUG ? "http://localhost:3000" : "https://unreader-v4yf.onrender.com"; 
+    var WS_URL = DEBUG ? "ws://localhost:3000" : "wss://unreader-v4yf.onrender.com";
 
     var token = localStorage.getItem('token');
     var myUsername = localStorage.getItem('username');
@@ -264,6 +244,8 @@
     var currentHistoryIndex = 0;
     var modModeActive = false;
     var userRoles = { is_admin: false, is_moderator: false };
+
+    function log(...args) { if (DO_LOGGING) console.log(`[CLIENT]`, ...args); }
 
     function parseMarkup(text) {
       if (!text) return "";
@@ -281,6 +263,7 @@
 
     function toggleModMode() {
       modModeActive = !modModeActive;
+      log("Toggling mod mode:", modModeActive);
       var btn = document.getElementById('mod-mode-btn');
       btn.textContent = modModeActive ? "MOD MODE: ACTIVE" : "MOD MODE: OFF";
       btn.className = modModeActive ? "mod-indicator-btn mod-indicator-active" : "mod-indicator-btn";
@@ -289,6 +272,7 @@
 
     document.getElementById('auth-toggle').onclick = function() {
       isRegisterMode = !isRegisterMode;
+      log("Toggling auth mode. isRegisterMode:", isRegisterMode);
       document.getElementById('auth-title').textContent = isRegisterMode ? 'REGISTER' : 'LOGIN';
       this.textContent = isRegisterMode ? 'Already have an account? Login' : 'Need an account? Register';
     };
@@ -298,20 +282,24 @@
       var password = document.getElementById('auth-pass').value;
       if(!username || !password) return alert('Fill in all log credentials.');
       var url = isRegisterMode ? '/api/register' : '/api/login';
+      log("Auth Submit. url:", url, "username:", username);
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + url, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
+          log("Auth XHR state 4. status:", xhr.status);
           if (xhr.status === 200) {
             try {
               var data = JSON.parse(xhr.responseText);
+              log("Auth success. user:", data.username);
               localStorage.setItem('token', data.token);
               localStorage.setItem('username', data.username);
               token = data.token; myUsername = data.username;
               initApp();
-            } catch(e) { alert("Server returned an invalid packet signature."); }
+            } catch(e) { log("JSON error:", e); alert("Server returned an invalid packet signature."); }
           } else {
+            log("Auth error response:", xhr.responseText);
             try {
               var errData = JSON.parse(xhr.responseText);
               alert("Server error: " + (errData.error || "Access Denied"));
@@ -322,17 +310,26 @@
       xhr.send(JSON.stringify({ username: username, password: password }));
     };
 
-    document.getElementById('logout-btn').onclick = function() { localStorage.clear(); window.location.reload(); };
+    document.getElementById('logout-btn').onclick = function() { 
+      log("Logging out.");
+      localStorage.clear(); window.location.reload(); 
+    };
 
     function initApp() {
+      log("Initializing app.");
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('user-display').textContent = '@' + myUsername;
       
       if (socket) { try { socket.close(); } catch(e){} }
+      log("Opening WebSocket at:", WS_URL);
       socket = new WebSocket(WS_URL);
-      socket.onopen = function() { socket.send(JSON.stringify({ type: 'auth', token: token })); };
+      socket.onopen = function() { 
+        log("WS Open. Sending auth.");
+        socket.send(JSON.stringify({ type: 'auth', token: token })); 
+      };
       socket.onmessage = function(event) {
         var data = JSON.parse(event.data);
+        log("WS Message received:", data.type);
         if (data.type === 'terminated') {
           alert(data.reason || 'Session expired.');
           localStorage.clear(); window.location.reload(); return;
@@ -344,6 +341,7 @@
           renderTopicList(data.topics);
           if (data.user_roles) {
             userRoles = data.user_roles;
+            log("Updating user roles:", userRoles);
             if (userRoles.is_admin || userRoles.is_moderator) {
               document.getElementById('mod-toggle-container').style.display = 'block';
             }
@@ -381,6 +379,7 @@
     }
 
     function loadDMContacts() {
+      log("Loading DM contacts.");
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/dm-contacts', true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
@@ -395,7 +394,7 @@
     function ensureDMNavOption(username) {
       if (document.getElementById('nav-dm-' + username) || username === myUsername) return;
       var item = document.createElement('div'); item.className = 'nav-item'; item.id = 'nav-dm-' + username;
-      item.textContent = '📨 ' + username; item.onclick = function() { switchChannel('dm', username); };
+      item.textContent = '💬 ' + username; item.onclick = function() { switchChannel('dm', username); };
       document.getElementById('dm-list').appendChild(item);
     }
 
@@ -409,12 +408,14 @@
       var inp = document.getElementById('topic-target-input');
       var title = inp.value.trim(); if(!title) return;
       if(socket && socket.readyState === WebSocket.OPEN) {
+        log("WS Send: create_topic", title);
         socket.send(JSON.stringify({ type: 'create_topic', title: title }));
       }
       inp.value = '';
     }
 
     function switchChannel(mode, target) {
+      log("Switching channel. mode:", mode, "target:", target);
       currentMode = mode; currentTarget = target || ''; currentHistoryIndex = 0;
       var items = document.getElementsByClassName('nav-item');
       for (var i=0; i<items.length; i++) items[i].className = 'nav-item';
@@ -440,6 +441,7 @@
     }
 
     function appendMessage(data) {
+      log("Appending message:", data.id, "roles:", {admin: data.is_admin, mod: data.is_moderator});
       var chatWrapper = document.getElementById('chat-scroll-wrapper');
       var containerDiv = document.createElement('div'); containerDiv.className = 'message-container';
       var msgDiv = document.createElement('div'); msgDiv.id = 'msg-id-' + data.id;
@@ -481,6 +483,7 @@
     }
 
     function appendNeighborhoodPost(data) {
+      log("Appending post:", data.id);
       var chatWrapper = document.getElementById('chat-scroll-wrapper');
       var box = document.createElement('div'); box.className = 'nb-post-box';
       box.id = 'nb-post-' + data.id;
@@ -520,7 +523,10 @@
                 var cDel = document.createElement('button'); cDel.style = 'float:right; font-size:8px; font-family:monospace; cursor:pointer; background:white; border:1px solid black;'; cDel.textContent = 'X';
                 (function(cid) { cDel.onclick = function() { 
                   var r = prompt("Reason?");
-                  if(r !== null) socket.send(JSON.stringify({ type: 'mod_delete', id: cid, channel: 'comment', reason: r })); 
+                  if(r !== null) {
+                    log("WS Send: mod_delete comment", cid);
+                    socket.send(JSON.stringify({ type: 'mod_delete', id: cid, channel: 'neighborhood_comment', reason: r })); 
+                  }
                 }; })(c.id);
                 cDiv.appendChild(cDel);
               }
@@ -542,6 +548,7 @@
       var inp = document.getElementById('input-comment-for-' + postId);
       var text = inp.value.trim(); if(!text) return;
       if(socket && socket.readyState === WebSocket.OPEN) {
+        log("WS Send: neighborhood_comment", postId);
         socket.send(JSON.stringify({ type: 'neighborhood_comment', post_id: postId, content: text }));
       }
       inp.value = '';
@@ -562,7 +569,10 @@
       } else {
         if (userRoles.is_admin || (userRoles.is_moderator && data.deleted_by === myUsername)) {
           var rBtn = document.createElement('button'); rBtn.className = 'mod-tray-btn'; rBtn.textContent = 'RESTORE';
-          rBtn.onclick = function() { sendModAction('mod_restore', data.id); };
+          rBtn.onclick = function() { 
+            log("WS Send: mod_restore", data.id);
+            sendModAction('mod_restore', data.id); 
+          };
           trayDiv.appendChild(rBtn);
         }
       }
@@ -570,6 +580,7 @@
     }
 
     function sendModAction(type, id, reason) {
+      log("Mod Action:", type, "id:", id, "channel:", currentMode);
       socket.send(JSON.stringify({ type: type, id: id, channel: currentMode, reason: reason }));
     }
 
@@ -579,6 +590,7 @@
     }
 
     function loadHistory() {
+      log("Loading history. mode:", currentMode, "index:", currentHistoryIndex);
       var wrapper = document.getElementById('chat-scroll-wrapper'); wrapper.innerHTML = '';
       var xhr = new XMLHttpRequest();
       var endpoint = '/history?index=';
@@ -589,6 +601,7 @@
       if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4 && xhr.status === 200) {
+          log("History loaded.");
           var data = JSON.parse(xhr.responseText);
           document.getElementById('page-display-index').textContent = "PAGE: " + currentHistoryIndex;
           for (var i = 0; i < data.length; i++) {
@@ -610,6 +623,7 @@
         socket.send(JSON.stringify({ type: 'neighborhood_post', title: titleText, content: text }));
         tInput.value = '';
       } else {
+        log("WS Send message. mode:", currentMode);
         socket.send(JSON.stringify({ type: currentMode === 'public' ? 'message' : (currentMode === 'topic' ? 'topic_message' : 'dm'), content: text, target: currentTarget }));
       }
       input.value = '';
@@ -629,6 +643,7 @@
     };
 
     function openProfileModal(targetUser) {
+      log("Opening profile for:", targetUser);
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/api/profile/' + targetUser, true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
@@ -641,6 +656,7 @@
     }
 
     function showProfileInModal(p) {
+      log("Showing profile in modal. roles:", {admin: p.is_admin, mod: p.is_moderator});
       document.getElementById('profile-view').style.display = 'block';
       document.getElementById('mod-log-view').style.display = 'none';
       document.getElementById('user-search-view').style.display = 'none';
@@ -691,6 +707,7 @@
     }
 
     function openModLogs() {
+      log("Opening Mod Logs.");
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/api/mod-logs', true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
@@ -711,6 +728,7 @@
     }
 
     function openUserSearch() {
+      log("Opening User Search.");
       document.getElementById('profile-view').style.display = 'none';
       document.getElementById('mod-log-view').style.display = 'none';
       document.getElementById('user-search-view').style.display = 'block';
@@ -721,6 +739,7 @@
     function searchUserAction() {
       var target = document.getElementById('user-search-input').value.trim();
       if (!target) return;
+      log("Searching for user:", target);
       var xhr = new XMLHttpRequest(); xhr.open('GET', BACKEND_URL + '/api/admin/find-user/' + target, true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.onreadystatechange = function() {
@@ -749,6 +768,7 @@
     }
 
     function setModeratorAction(target, isMod) {
+      log("Setting mod status for:", target, "isMod:", isMod);
       var xhr = new XMLHttpRequest(); xhr.open('POST', BACKEND_URL + '/api/admin/set-role', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
@@ -757,6 +777,7 @@
     }
 
     function adminAction(type, target) {
+      log("Admin Action:", type, "on:", target);
       socket.send(JSON.stringify({ type: type, target: target }));
       setTimeout(searchUserAction, 500);
     }
@@ -767,6 +788,7 @@
       var av = document.getElementById('edit-avatar').value.trim();
       var loc = document.getElementById('edit-location').value.trim();
       var bio = document.getElementById('edit-bio').value.trim();
+      log("Saving profile changes.");
       var xhr = new XMLHttpRequest(); xhr.open('POST', BACKEND_URL + '/api/profile', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
@@ -778,6 +800,7 @@
       var currentPass = document.getElementById('change-pass-current').value;
       var newPass = document.getElementById('change-pass-new').value;
       if (!currentPass || !newPass) return alert('Please fill out both password fields.');
+      log("Submitting password change.");
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + '/api/change-password', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
