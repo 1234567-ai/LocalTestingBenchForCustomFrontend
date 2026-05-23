@@ -4,8 +4,10 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import pkg from 'pg'
 import cors from 'cors'
+import fs from 'node:fs/promises'
+import fsync from 'node:fs'
 
-const { Pool } = pkg 
+const { Pool } = pkg
 const JWT_SECRET = process.env.JWT_SECRET || 'brutalist_secret_key_123'
 const DO_LOGGING = true;
 
@@ -113,21 +115,21 @@ async function authenticateToken(req, res, next) {
     const roles = await getUserRoles(decoded.username);
     req.user = { ...decoded, ...roles };
     next();
-  } catch (err) { 
+  } catch (err) {
     log("Auth Token verification failed:", err.message);
-    return res.status(403).json({ error: 'Invalid token' }); 
+    return res.status(403).json({ error: 'Invalid token' });
   }
 }
 
 const activeClients = new Map()
 function broadcastSystemUpdate(payloadObj) {
   const msgStr = JSON.stringify(payloadObj);
-  activeClients.forEach((c, username) => { 
-    if(c.readyState === WebSocket.OPEN) {
-        c.send(msgStr); 
+  activeClients.forEach((c, username) => {
+    if (c.readyState === WebSocket.OPEN) {
+      c.send(msgStr);
     } else {
-        log(`Pruning inactive connection: ${username}`);
-        activeClients.delete(username);
+      log(`Pruning inactive connection: ${username}`);
+      activeClients.delete(username);
     }
   });
 }
@@ -146,9 +148,9 @@ app.post('/api/register', async (req, res) => {
     await db.query('INSERT INTO users (username, password_hash, last_ip) VALUES ($1, $2, $3);', [username, hash, ip]);
     await db.query('INSERT INTO profiles (username) VALUES ($1) ON CONFLICT DO NOTHING;', [username]);
     res.json({ token: jwt.sign({ username }, JWT_SECRET), username });
-  } catch (err) { 
+  } catch (err) {
     log("Registration collision/error:", err.message);
-    res.status(400).json({ error: 'Username already taken' }); 
+    res.status(400).json({ error: 'Username already taken' });
   }
 });
 
@@ -160,8 +162,8 @@ app.post('/api/login', async (req, res) => {
     const result = await db.query('SELECT * FROM users WHERE username = $1;', [username]);
     const user = result.rows[0];
     if (!user || user.is_banned || !(await bcrypt.compare(password, user.password_hash))) {
-        log(`Login REJECTED for ${username}`);
-        return res.status(401).json({ error: 'Rejected' });
+      log(`Login REJECTED for ${username}`);
+      return res.status(401).json({ error: 'Rejected' });
     }
     await db.query('UPDATE users SET last_ip = $1 WHERE username = $2;', [ip, username]);
     log(`Login SUCCESS: ${username}`);
@@ -259,6 +261,20 @@ app.get('/neighborhood-history', authenticateToken, async (req, res) => {
 const server = app.listen(process.env.PORT || 10000, '0.0.0.0', () => log(`Node strictly bound to port: ${process.env.PORT || 10000}`));
 const wss = new WebSocketServer({ server });
 
+server.on('request', async (req, res) => {
+  if (req.url.startsWith('/api')) return
+  if (!req.url.endsWith('.html')) return
+  if ('..' in req.url) return
+  if (!fsync.existsSync('.' + req.url)) {
+    res.writeHead(404, { 'content-type': 'text/html' })
+    res.end('<h1>File not found</h1>')
+    return
+  }
+  const html = await fs.readFile('.' + req.url, 'utf8')
+  res.writeHead(200, { 'content-type': 'text/html' })
+  res.end(html)
+})
+
 const ALLOWED_CHANNELS = { 'public': 'messages', 'topic': 'topic_messages', 'neighborhood': 'neighborhood_posts', 'dm': 'dms', 'comment': 'neighborhood_comments', 'neighborhood_comment': 'neighborhood_comments' };
 
 wss.on('connection', (ws, req) => {
@@ -300,24 +316,24 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'mod_delete' || data.type === 'mod_restore') {
         const targetTable = ALLOWED_CHANNELS[data.channel];
         log(`MOD PACKET: action=${data.type}, targetSpace=${data.channel}, table=${targetTable}, id=${data.id}`);
-        
+
         if (!targetTable) {
-            log(`CRITICAL: Infrastructure target space undefined for channel ${data.channel}`);
-            return;
+          log(`CRITICAL: Infrastructure target space undefined for channel ${data.channel}`);
+          return;
         }
-        
+
         const res = await db.query(`SELECT username, sender, deleted_by FROM ${targetTable} WHERE id = $1;`, [data.id]);
         const targetObj = res.rows[0];
         if (!targetObj) {
-            log(`CRITICAL: ID ${data.id} not tracked in ${targetTable}`);
-            return;
+          log(`CRITICAL: ID ${data.id} not tracked in ${targetTable}`);
+          return;
         }
         const owner = targetObj.username || targetObj.sender;
         if (!owner) {
-            log(`CRITICAL: Owner not found for ID ${data.id} in ${targetTable}`);
-            return;
+          log(`CRITICAL: Owner not found for ID ${data.id} in ${targetTable}`);
+          return;
         }
-        
+
         const isOwner = (owner === authUser);
         const canUndo = userRoles.is_admin || (userRoles.is_moderator && targetObj.deleted_by === authUser);
         const canDelete = isOwner || userRoles.is_admin || userRoles.is_moderator;
@@ -334,7 +350,7 @@ wss.on('connection', (ws, req) => {
           await db.query(`UPDATE ${targetTable} SET is_deleted = false, deleted_by = NULL WHERE id = $1;`, [data.id]);
           broadcastSystemUpdate({ type: 'refresh_feed' });
         } else {
-            log(`MOD ACTION REJECTED: Access level mismatch or ownership collision`);
+          log(`MOD ACTION REJECTED: Access level mismatch or ownership collision`);
         }
       }
 
@@ -343,19 +359,19 @@ wss.on('connection', (ws, req) => {
           const targetRoles = await getUserRoles(data.target);
           if (targetRoles.is_admin) return ws.send(JSON.stringify({ type: 'error_alert', message: 'System operator immunity detected.' }));
           log(`USER TIMEOUT: target=${data.target}, duration=${data.duration}m, by=${authUser}`);
-          await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (parseInt(data.duration, 10)*60*1000), data.target]);
+          await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (parseInt(data.duration, 10) * 60 * 1000), data.target]);
           if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', data.target, data.reason || 'No reason provided', Date.now()]);
-          if(activeClients.has(data.target)) { activeClients.get(data.target).send(JSON.stringify({ type: 'terminated' })); activeClients.get(data.target).close(); }
+          if (activeClients.has(data.target)) { activeClients.get(data.target).send(JSON.stringify({ type: 'terminated' })); activeClients.get(data.target).close(); }
         }
         if (userRoles.is_admin) {
-          if (data.type === 'mod_ban') { 
-              log(`ADMIN BAN: target=${data.target}, by=${authUser}`);
-              await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [data.target]); 
-              if(activeClients.has(data.target)) activeClients.get(data.target).close(); 
+          if (data.type === 'mod_ban') {
+            log(`ADMIN BAN: target=${data.target}, by=${authUser}`);
+            await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [data.target]);
+            if (activeClients.has(data.target)) activeClients.get(data.target).close();
           }
           if (data.type === 'mod_pardon') {
-              log(`ADMIN PARDON: target=${data.target}, by=${authUser}`);
-              await db.query('UPDATE users SET is_banned = false, timeout_until = 0 WHERE username = $1;', [data.target]);
+            log(`ADMIN PARDON: target=${data.target}, by=${authUser}`);
+            await db.query('UPDATE users SET is_banned = false, timeout_until = 0 WHERE username = $1;', [data.target]);
           }
         }
       }
