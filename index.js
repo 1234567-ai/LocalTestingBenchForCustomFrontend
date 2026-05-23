@@ -98,6 +98,24 @@ initDatabase();
 
 const app = express()
 app.set('trust proxy', true);
+app.use(async (req, res, next) => {
+  console.log('Received raw request')
+  if (req.url.startsWith('/api')
+    || !req.url.endsWith('.html')
+    || '..' in req.url) next()
+  else {
+    if (!fsync.existsSync('.' + req.url)) {
+      console.log('Requested inexistant file')
+      res.writeHead(404, { 'content-type': 'text/html' })
+      res.end('<h1>File not found</h1>')
+      return
+    }
+    console.log('Requested ' + req.url)
+    const html = await fs.readFile('.' + req.url, 'utf8')
+    res.writeHead(200, { 'content-type': 'text/html' })
+    res.end(html)
+  }
+})
 app.use(cors());
 app.use(express.json())
 
@@ -260,20 +278,6 @@ app.get('/neighborhood-history', authenticateToken, async (req, res) => {
 
 const server = app.listen(process.env.PORT || 10000, '0.0.0.0', () => log(`Node strictly bound to port: ${process.env.PORT || 10000}`));
 const wss = new WebSocketServer({ server });
-
-server.on('request', async (req, res) => {
-  if (req.url.startsWith('/api')) return
-  if (!req.url.endsWith('.html')) return
-  if ('..' in req.url) return
-  if (!fsync.existsSync('.' + req.url)) {
-    res.writeHead(404, { 'content-type': 'text/html' })
-    res.end('<h1>File not found</h1>')
-    return
-  }
-  const html = await fs.readFile('.' + req.url, 'utf8')
-  res.writeHead(200, { 'content-type': 'text/html' })
-  res.end(html)
-})
 
 const ALLOWED_CHANNELS = { 'public': 'messages', 'topic': 'topic_messages', 'neighborhood': 'neighborhood_posts', 'dm': 'dms', 'comment': 'neighborhood_comments', 'neighborhood_comment': 'neighborhood_comments' };
 
