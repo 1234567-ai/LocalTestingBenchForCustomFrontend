@@ -8,6 +8,8 @@
     />
     <title>Un-Reader Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.2/purify.min.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="common.js"></script>
     <style>
       /* --- E-ink Specific Core Layout & Architecture --- */
       * {
@@ -858,7 +860,7 @@
         localStorage.setItem('unreader-refresh', e.target.value),
       );
 
-      resetCache.addEventListener('click', () => {
+      resetCache.addEventListener('click', async () => {
         localStorage.clear();
         document.body.className = '';
         document.documentElement.style.setProperty(
@@ -870,7 +872,7 @@
         refreshSelect.value = 'speed';
         updateIdentityUI();
         buildApplicationGrid();
-        alert('Settings reverted to stock configuration rules.');
+        await unAlert('Settings reverted to stock configuration rules.');
         closeView('settings-view');
       });
 

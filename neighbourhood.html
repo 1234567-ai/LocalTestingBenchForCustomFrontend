@@ -6,142 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>un-reader BBS - Neighbourhood</title>
   <link rel="stylesheet" media="screen" href="https://fontlibrary.org/face/symbola/css/symbola.css" type="text/css" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="bbs.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.2/purify.min.js"></script>
+  <script src="common.js"></script>
   <style type="text/css">
-    :root {
-      --bg-color: #ffffff;
-      --text-color: #000000;
-      --border: 2px solid #000000;
-      --border-width: 2px;
-      --shadow: 4px 4px 0px #000000;
-      --stripe-pattern: repeating-linear-gradient(0deg,
-          transparent,
-          transparent 2px,
-          #000 3px,
-          #000 4px);
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      height: 100%;
-      width: 100%;
-      font-family: 'Geneva', 'Verdana', sans-serif, 'SymbolaRegular';
-      background-color: #e5e5e5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .window {
-      background: white;
-      border: var(--border);
-      box-shadow: var(--shadow);
-      display: flex;
-      flex-direction: column;
-      height: 95vh;
-      width: 98vw;
-      max-width: 950px;
-      position: relative;
-    }
-
-    .title-bar {
-      height: 35px;
-      border-bottom: var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: white;
-      padding: 0 10px;
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    .title-stripes {
-      position: absolute;
-      top: 4px;
-      bottom: 4px;
-      left: 4px;
-      right: 4px;
-      background-image: var(--stripe-pattern);
-      z-index: 0;
-    }
-
-    .title-text {
-      background: white;
-      padding: 0 15px;
-      font-weight: bold;
-      z-index: 1;
-      font-size: 14px;
-      text-transform: uppercase;
-    }
-
-    #back-btn {
-      position: absolute;
-      left: 10px;
-      z-index: 2;
-      cursor: pointer;
-      font-family: monospace;
-      font-size: 11px;
-      background: white;
-      border: var(--border);
-      padding: 2px 6px;
-      box-shadow: 2px 2px 0 black;
-      font-weight: bold;
-    }
-
-    #user-display {
-      position: absolute;
-      right: 10px;
-      z-index: 2;
-      font-size: 11px;
-      font-weight: bold;
-      background: white;
-      padding: 2px 6px;
-      border: 1px solid black;
-      cursor: pointer;
-    }
-
-    #workspace-table {
-      width: 100%;
-      height: calc(100% - 37px);
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-
     #sidebar-cell {
-      width: 230px;
-      background: #fafafa;
-      border-right: var(--border);
-      vertical-align: top;
-      padding: 0;
       overflow-y: auto;
-    }
-
-    #chat-cell {
-      vertical-align: top;
-      padding: 0;
-      position: relative;
-      background-color: #ffffff;
-    }
-
-    .panel-header {
-      font-weight: bold;
-      padding: 6px 8px;
-      text-transform: uppercase;
-      border-bottom: var(--border);
-      border-top: var(--border);
-      background: #eee;
-      font-size: 10px;
-      letter-spacing: 1px;
-    }
-
-    .panel-header:first-child {
-      border-top: none;
     }
 
     #roster-list {
@@ -953,17 +825,17 @@
         : 'Need an account? Register';
     };
 
-    document.getElementById('auth-submit-btn').onclick = function () {
+    document.getElementById('auth-submit-btn').onclick = async function () {
       var username = document.getElementById('auth-user').value.trim();
       var password = document.getElementById('auth-pass').value;
       if (!username || !password)
-        return alert('Fill in all log credentials.');
+        return await unAlert('Fill in all log credentials.');
       var url = isRegisterMode ? '/api/register' : '/api/login';
       log('Auth submit. endpoint:', url, 'user:', username);
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + url, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.onreadystatechange = function () {
+      xhr.onreadystatechange = async function () {
         if (xhr.readyState === 4) {
           log('Auth XHR complete. status:', xhr.status);
           if (xhr.status === 200) {
@@ -977,15 +849,15 @@
               initApp();
             } catch (e) {
               log('Auth JSON parse error:', e);
-              alert('Server returned an invalid packet signature.');
+              await unAlert('Server returned an invalid packet signature.');
             }
           } else {
             log('Auth failed. buffer:', xhr.responseText);
             try {
               var errData = JSON.parse(xhr.responseText);
-              alert('Server error: ' + (errData.error || 'Access Denied'));
+              await unAlert('Server error: ' + (errData.error || 'Access Denied'));
             } catch (e) {
-              alert('Structural connection failure.');
+              await unAlert('Structural connection failure.');
             }
           }
         }
@@ -1009,17 +881,17 @@
         log('WS Link connected. Authenticating...');
         socket.send(JSON.stringify({ type: 'auth', token: token }));
       };
-      socket.onmessage = function (event) {
+      socket.onmessage = async function (event) {
         var data = JSON.parse(event.data);
         log('Incoming packet:', data.type);
         if (data.type === 'terminated') {
-          alert(data.reason || 'Session expired.');
+          await unAlert(data.reason || 'Session expired.');
           localStorage.clear();
           window.location.reload();
           return;
         }
         if (data.type === 'error_alert') {
-          alert(data.message);
+          await unAlert(data.message);
           return;
         }
         if (data.type === 'refresh_feed') {
@@ -1151,8 +1023,8 @@
                   'float:right; font-size:8px; font-family:monospace; cursor:pointer; background:white; border:1px solid black;';
                 cDel.textContent = 'X';
                 (function (cid) {
-                  cDel.onclick = function () {
-                    var r = prompt('Reason?');
+                  cDel.onclick = async function () {
+                    var r = await unPrompt('Reason?');
                     if (r !== null) {
                       log('Mod Action: Purge Comment id:', cid);
                       socket.send(
@@ -1216,12 +1088,13 @@
         var dBtn = document.createElement('button');
         dBtn.className = 'mod-tray-btn';
         dBtn.textContent = 'PURGE';
-        dBtn.onclick = function () {
-          var r = prompt('Reason for purge?');
+        dBtn.onclick = async function () {
+          var r = await unPrompt('Reason for purge?');
           if (r !== null) sendModAction('mod_delete', data.id, r);
         };
         trayDiv.appendChild(dBtn);
-      } else {
+      }
+ else {
         if (
           userRoles.is_admin ||
           (userRoles.is_moderator && data.deleted_by === myUsername)
@@ -1283,14 +1156,14 @@
       xhr.send();
     }
 
-    function sendMessage() {
+    async function sendMessage() {
       var input = document.getElementById('content');
       var text = input.value.trim();
       if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
 
       var tInput = document.getElementById('nb-title-input');
       var titleText = tInput.value.trim();
-      if (!titleText) return alert('Enter a post heading title.');
+      if (!titleText) return await unAlert('Enter a post heading title.');
       socket.send(
         JSON.stringify({
           type: 'neighborhood_post',
@@ -1368,8 +1241,8 @@
           'inline-block';
         document.getElementById('admin-pardon-btn').style.display =
           'inline-block';
-        document.getElementById('admin-ban-btn').onclick = function () {
-          if (confirm('Ban ' + p.username + '?'))
+        document.getElementById('admin-ban-btn').onclick = async function () {
+          if (await unConfirm('Ban ' + p.username + '?'))
             socket.send(
               JSON.stringify({ type: 'mod_ban', target: p.username }),
             );
@@ -1379,7 +1252,7 @@
             JSON.stringify({ type: 'mod_pardon', target: p.username }),
           );
         };
-        document.getElementById('admin-timeout-btn').onclick = function () {
+        document.getElementById('admin-timeout-btn').onclick = async function () {
           var dur = document.getElementById('admin-timeout-dur').value;
           socket.send(
             JSON.stringify({
@@ -1393,9 +1266,9 @@
         document.getElementById('admin-controls').style.display = 'block';
         document.getElementById('admin-ban-btn').style.display = 'none';
         document.getElementById('admin-pardon-btn').style.display = 'none';
-        document.getElementById('admin-timeout-btn').onclick = function () {
+        document.getElementById('admin-timeout-btn').onclick = async function () {
           var dur = document.getElementById('admin-timeout-dur').value;
-          var r = prompt('Reason for timeout?');
+          var r = await unPrompt('Reason for timeout?');
           if (r)
             socket.send(
               JSON.stringify({
@@ -1434,23 +1307,23 @@
       xhr.send(JSON.stringify({ bio: bio, location: loc, avatar_emoji: av }));
     }
 
-    function submitPasswordChange() {
+    async function submitPasswordChange() {
       var currentPass = document.getElementById('change-pass-current').value;
       var newPass = document.getElementById('change-pass-new').value;
       if (!currentPass || !newPass)
-        return alert('Please fill out both password fields.');
+        return await unAlert('Please fill out both password fields.');
       log('Sending security parameter update packet.');
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + '/api/change-password', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-      xhr.onreadystatechange = function () {
+      xhr.onreadystatechange = async function () {
         if (xhr.readyState === 4) {
           var res = JSON.parse(xhr.responseText);
           if (xhr.status === 200 && res.success) {
-            alert('Password updated!');
+            await unAlert('Password updated!');
             closeInfoModal();
-          } else alert(res.error || 'Failed to update password.');
+          } else await unAlert(res.error || 'Failed to update password.');
         }
       };
       xhr.send(

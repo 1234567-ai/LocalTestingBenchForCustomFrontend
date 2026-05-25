@@ -11,108 +11,10 @@
       href="https://fontlibrary.org/face/symbola/css/symbola.css"
       type="text/css"
     />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="bbs.css" />
+    <script src="common.js"></script>
     <style type="text/css">
-      :root {
-        --bg-color: #ffffff;
-        --text-color: #000000;
-        --border: 2px solid #000000;
-        --border-width: 2px;
-        --shadow: 4px 4px 0px #000000;
-        --stripe-pattern: repeating-linear-gradient(
-          0deg,
-          transparent,
-          transparent 2px,
-          #000 3px,
-          #000 4px
-        );
-      }
-
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        height: 100%;
-        width: 100%;
-        font-family: 'Geneva', 'Verdana', sans-serif, 'SymbolaRegular';
-        background-color: #e5e5e5;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .window {
-        background: white;
-        border: var(--border);
-        box-shadow: var(--shadow);
-        display: flex;
-        flex-direction: column;
-        height: 95vh;
-        width: 98vw;
-        max-width: 950px;
-        position: relative;
-      }
-
-      .title-bar {
-        height: 35px;
-        border-bottom: var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: white;
-        padding: 0 10px;
-        position: relative;
-        flex-shrink: 0;
-      }
-      .title-stripes {
-        position: absolute;
-        top: 4px;
-        bottom: 4px;
-        left: 4px;
-        right: 4px;
-        background-image: var(--stripe-pattern);
-        z-index: 0;
-      }
-      .title-text {
-        background: white;
-        padding: 0 15px;
-        font-weight: bold;
-        z-index: 1;
-        font-size: 14px;
-        text-transform: uppercase;
-      }
-
-      #back-btn {
-        position: absolute;
-        left: 10px;
-        z-index: 2;
-        cursor: pointer;
-        font-family: monospace;
-        font-size: 11px;
-        background: white;
-        border: var(--border);
-        padding: 2px 6px;
-        box-shadow: 2px 2px 0 black;
-        font-weight: bold;
-      }
-      #user-display {
-        position: absolute;
-        right: 10px;
-        z-index: 2;
-        font-size: 11px;
-        font-weight: bold;
-        background: white;
-        padding: 2px 6px;
-        border: 1px solid black;
-      }
-
-      #workspace-table {
-        width: 100%;
-        height: calc(100% - 37px);
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
       #sidebar-cell {
         width: 230px;
         background: #fafafa;
@@ -407,87 +309,10 @@
     </div>
 
     <script type="text/javascript">
-      const DEBUG = false;
-      const DO_LOGGING = true;
-      var BACKEND_URL = DEBUG
-        ? 'http://localhost'
-        : 'https://unreader-v4yf.onrender.com';
-      var WS_URL = DEBUG
-        ? 'ws://localhost'
-        : 'wss://unreader-v4yf.onrender.com';
-
-      // Standardized token sharing & preference loader
-      function applySavedPreferences() {
-        if (
-          localStorage.getItem('unreader-token') &&
-          !localStorage.getItem('token')
-        ) {
-          localStorage.setItem('token', localStorage.getItem('unreader-token'));
-        }
-        if (
-          localStorage.getItem('unreader-username') &&
-          !localStorage.getItem('username')
-        ) {
-          localStorage.setItem(
-            'username',
-            localStorage.getItem('unreader-username'),
-          );
-        }
-        if (
-          localStorage.getItem('token') &&
-          !localStorage.getItem('unreader-token')
-        ) {
-          localStorage.setItem('unreader-token', localStorage.getItem('token'));
-        }
-        if (
-          localStorage.getItem('username') &&
-          !localStorage.getItem('unreader-username')
-        ) {
-          localStorage.setItem(
-            'unreader-username',
-            localStorage.getItem('username'),
-          );
-        }
-
-        if (localStorage.getItem('unreader-darkmode') === 'enabled') {
-          document.body.classList.add('dark-mode');
-        }
-        const savedContrast =
-          localStorage.getItem('unreader-contrast') || 'normal';
-        if (savedContrast !== 'normal') {
-          document.body.classList.add(`contrast-${savedContrast}`);
-        }
-        const savedFont = localStorage.getItem('unreader-font') || 'sans';
-        if (savedFont === 'mono') {
-          document.documentElement.style.setProperty(
-            '--body-font',
-            'monospace',
-          );
-          document.body.style.fontFamily = 'monospace';
-        }
-      }
-      applySavedPreferences();
-
       var token = localStorage.getItem('token');
       var myUsername = localStorage.getItem('username');
       var socket = null;
       var userRoles = { is_admin: false, is_moderator: false };
-
-      function log(...args) {
-        if (DO_LOGGING) console.log(`[CLIENT]`, ...args);
-      }
-
-      function formatTimeToken(unixTimestamp) {
-        if (!unixTimestamp) return 'MOMENTS AGO';
-        var parsedNum = Number(unixTimestamp);
-        if (isNaN(parsedNum)) return 'MOMENTS AGO';
-        var d = new Date(parsedNum);
-        return (
-          d.toLocaleDateString() +
-          ' ' +
-          d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        );
-      }
 
       function initApp() {
         log('Booting moderation layers.');
@@ -504,15 +329,15 @@
           log('WS Link connected. Authenticating...');
           socket.send(JSON.stringify({ type: 'auth', token: token }));
         };
-        socket.onmessage = function (event) {
+        socket.onmessage = async function (event) {
           var data = JSON.parse(event.data);
           if (data.type === 'terminated') {
-            alert('Session terminated.');
+            await unAlert('Session terminated.');
             window.location.href = 'index.html';
             return;
           }
           if (data.type === 'error_alert') {
-            alert(data.message);
+            await unAlert(data.message);
             return;
           }
           if (data.type === 'topics_update') {
@@ -522,7 +347,7 @@
 
               // Security verification
               if (!userRoles.is_admin && !userRoles.is_moderator) {
-                alert(
+                await unAlert(
                   'Access Denied: You do not possess structural operator credentials.',
                 );
                 window.location.href = 'index.html';
@@ -637,12 +462,12 @@
         xhr.send();
       }
 
-      function submitTimeout(targetUser) {
+      async function submitTimeout(targetUser) {
         var dur = document.getElementById('admin-timeout-dur').value;
         if (!socket || socket.readyState !== WebSocket.OPEN)
-          return alert('Socket offline.');
+          return await unAlert('Socket offline.');
         // Admins do not need to provide a reason for timeout
-        var reason = userRoles.is_admin ? '' : prompt('Reason for timeout?');
+        var reason = userRoles.is_admin ? '' : await unPrompt('Reason for timeout?');
         if (!userRoles.is_admin && !reason) return;
         var payload = {
           type: 'mod_timeout',
@@ -670,10 +495,10 @@
         xhr.send(JSON.stringify({ target: target, is_moderator: isMod }));
       }
 
-      function adminAction(type, target) {
+      async function adminAction(type, target) {
         if (
           type === 'mod_ban' &&
-          !confirm('Are you absolutely sure you want to BAN ' + target + '?')
+          !(await unConfirm('Are you absolutely sure you want to BAN ' + target + '?'))
         )
           return;
         log('Sending administrative action packet:', type);
@@ -684,32 +509,35 @@
         }, 500);
       }
 
-      function banIP(targetUser) {
-        if (!userRoles.is_admin) return alert('Only admins can ban IPs.');
+      async function banIP(targetUser) {
+        if (!userRoles.is_admin) return await unAlert('Only admins can ban IPs.');
         var xhr = new XMLHttpRequest();
         xhr.open('POST', BACKEND_URL + '/api/admin/ban-ip', true);
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-        xhr.onreadystatechange = function () {
+        xhr.onreadystatechange = async function () {
           if (xhr.readyState === 4) {
             if (xhr.status === 200) {
-              alert('IP ban successful for ' + targetUser);
+              await unAlert('IP ban successful for ' + targetUser);
               searchUserAction();
               openModLogs();
             } else {
-              alert('IP ban failed: ' + xhr.responseText);
+              await unAlert('IP ban failed: ' + xhr.responseText);
             }
           }
         };
         xhr.send(JSON.stringify({ username: targetUser }));
       }
 
-      if (token && myUsername) {
-        initApp();
-      } else {
-        alert('Please log in on the homepage first.');
-        window.location.href = 'index.html';
-      }
+      (async function() {
+        applySavedPreferences();
+        if (token && myUsername) {
+          initApp();
+        } else {
+          await unAlert('Please log in on the homepage first.');
+          window.location.href = 'index.html';
+        }
+      })();
     </script>
   </body>
 </html>

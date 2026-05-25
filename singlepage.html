@@ -852,14 +852,8 @@
     </table>
   </div>
 
+  <script src="common.js"></script>
   <script type="text/javascript">
-    const DEBUG = false;
-    const DO_LOGGING = true;
-    var BACKEND_URL = DEBUG
-      ? 'http://localhost'
-      : 'https://unreader.onrender.com';
-    var WS_URL = DEBUG ? 'ws://localhost' : 'wss://unreader.onrender.com';
-
     var token = localStorage.getItem('token');
     var myUsername = localStorage.getItem('username');
     var currentMode = 'public';
@@ -869,69 +863,6 @@
     var currentHistoryIndex = 0;
     var modModeActive = false;
     var userRoles = { is_admin: false, is_moderator: false };
-
-    function log(...args) {
-      if (DO_LOGGING) console.log(`[CLIENT]`, ...args);
-    }
-
-    function parseMarkdownForKindle(text) {
-      // replace bold text: '**text**' -> '<strong>text</strong>'
-      text = text.replace(/([\*_])([\*_](.*?)[\*_])([\*_])/g, '<strong>$2</strong>');
-      // replace italic text: '*text*' -> '<i>text</i>'
-      text = text.replace(/([\*_])(.*?)([\*_])/g, '<i>$2</i>');
-      // replace links: '[text](url)' -> '<a href="url">text</a>'
-      text = text.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
-      // replace images: '![alt text](url)' -> '<img src="url" alt="alt text">'
-      text = text.replace(/\!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1">');
-      // replace headers: # H1 -> <h1>H1</h1>
-      text = text.replace(/\#{1} (.*?)/g, '<h1>$1</h1>');
-      // replace headers: ## H2 -> <h2>H2</h2>
-      text = text.replace(/\#{2} (.*?)/g, '<h2>$1</h2>');
-      // replace headers: ### H3 -> <h3>H3</h3>
-      text = text.replace(/\#{3} (.*?)/g, '<h3>H3</h3>');
-      // replace headers: #### H4 -> <h4>H4</h4>
-      text = text.replace(/\#{4} (.*?)/g, '<h4>H4</h4>');
-      // replace headers: ##### H5 -> <h5>H5</h5>
-      text = text.replace(/\#{5} (.*?)/g, '<h5>H5</h5>');
-      // replace headers: ###### H6 -> <h6>H6</h6>
-      text = text.replace(/\#{6} (.*?)/g, '<h6>H6</h6>');
-      // replace unordered lists: '- item' -> '<li>item</li>'
-      text = text.replace(/^(-|\*) (.*?)/g, '<li>$1</li>');
-      // replace ordered lists: '1. item' -> '<li>item</li>'
-      text = text.replace(/^\d\. (.*?)/g, '<li>$1</li>');
-      // replace code blocks: '```code```' -> '<pre><code>code</code></pre>'
-      text = text.replace(/```(.*?)```/g, '<pre><code>$1</code></pre>');
-      // replace inline code: '`code`' -> '<code>code</code>'
-      text = text.replace(/`(.*?)`/g, '<code>$1</code>');
-      // replace blockquotes: '> quote' -> '<blockquote>quote</blockquote>'
-      text = text.replace(/\>(.*?)/g, '<blockquote>$1</blockquote>');
-      // replace horizontal rules: '---' -> '<hr>'
-      text = text.replace(/\-\-\- /g, '<hr>');
-      // replace strikethrough: '~text~' -> '<del>text</del>'
-      text = text.replace(/~(.*?)~/g, '<del>$1</del>');
-      return text;
-    }
-
-    function parseMarkup(text) {
-      if (!text) return '';
-      const escaped = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      if (navigator.userAgent.toLowerCase().includes('kindle')) {
-        return DOMPurify.sanitize(escaped);
-      }
-      return DOMPurify.sanitize(marked.parse(escaped)).trim();
-    }
-
-    function formatTimeToken(unixTimestamp) {
-      if (!unixTimestamp) return 'MOMENTS AGO';
-      var parsedNum = Number(unixTimestamp);
-      if (isNaN(parsedNum)) return 'MOMENTS AGO';
-      var d = new Date(parsedNum);
-      return (
-        d.toLocaleDateString() +
-        ' ' +
-        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      );
-    }
 
     function toggleModMode() {
       modModeActive = !modModeActive;
@@ -955,17 +886,17 @@
         : 'Need an account? Register';
     };
 
-    document.getElementById('auth-submit-btn').onclick = function () {
+    document.getElementById('auth-submit-btn').onclick = async function () {
       var username = document.getElementById('auth-user').value.trim();
       var password = document.getElementById('auth-pass').value;
       if (!username || !password)
-        return alert('Fill in all log credentials.');
+        return await unAlert('Fill in all log credentials.');
       var url = isRegisterMode ? '/api/register' : '/api/login';
       log('Auth submit. endpoint:', url, 'user:', username);
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + url, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.onreadystatechange = function () {
+      xhr.onreadystatechange = async function () {
         if (xhr.readyState === 4) {
           log('Auth XHR complete. status:', xhr.status);
           if (xhr.status === 200) {
@@ -978,15 +909,15 @@
               initApp();
             } catch (e) {
               log('Auth JSON parse error:', e);
-              alert('Server returned an invalid packet signature.');
+              await unAlert('Server returned an invalid packet signature.');
             }
           } else {
             log('Auth failed. buffer:', xhr.responseText);
             try {
               var errData = JSON.parse(xhr.responseText);
-              alert('Server error: ' + (errData.error || 'Access Denied'));
+              await unAlert('Server error: ' + (errData.error || 'Access Denied'));
             } catch (e) {
-              alert('Structural connection failure.');
+              await unAlert('Structural connection failure.');
             }
           }
         }
@@ -1016,17 +947,17 @@
         log('WS Link connected. Authenticating...');
         socket.send(JSON.stringify({ type: 'auth', token: token }));
       };
-      socket.onmessage = function (event) {
+      socket.onmessage = async function (event) {
         var data = JSON.parse(event.data);
         log('Incoming packet:', data.type);
         if (data.type === 'terminated') {
-          alert(data.reason || 'Session expired.');
+          await unAlert(data.reason || 'Session expired.');
           localStorage.clear();
           window.location.reload();
           return;
         }
         if (data.type === 'error_alert') {
-          alert(data.message);
+          await unAlert(data.message);
           return;
         }
         if (data.type === 'refresh_feed') {
@@ -1231,8 +1162,8 @@
           var selfDelBtn = document.createElement('button');
           selfDelBtn.className = 'user-delete-btn';
           selfDelBtn.textContent = 'X';
-          selfDelBtn.onclick = function () {
-            if (confirm('Delete message?'))
+          selfDelBtn.onclick = async function () {
+            if (await unConfirm('Delete message?'))
               sendModAction('mod_delete', data.id);
           };
           msgDiv.appendChild(selfDelBtn);
@@ -1327,8 +1258,8 @@
                   'float:right; font-size:8px; font-family:monospace; cursor:pointer; background:white; border:1px solid black;';
                 cDel.textContent = 'X';
                 (function (cid) {
-                  cDel.onclick = function () {
-                    var r = prompt('Reason?');
+                  cDel.onclick = async function () {
+                    var r = await unPrompt('Reason?');
                     if (r !== null) {
                       log('Mod Action: Purge Comment id:', cid);
                       socket.send(
@@ -1392,12 +1323,13 @@
         var dBtn = document.createElement('button');
         dBtn.className = 'mod-tray-btn';
         dBtn.textContent = 'PURGE';
-        dBtn.onclick = function () {
-          var r = prompt('Reason for purge?');
+        dBtn.onclick = async function () {
+          var r = await unPrompt('Reason for purge?');
           if (r !== null) sendModAction('mod_delete', data.id, r);
         };
         trayDiv.appendChild(dBtn);
-      } else {
+      }
+ else {
         if (
           userRoles.is_admin ||
           (userRoles.is_moderator && data.deleted_by === myUsername)
@@ -1467,14 +1399,14 @@
       xhr.send();
     }
 
-    function sendMessage() {
+    async function sendMessage() {
       var input = document.getElementById('content');
       var text = input.value.trim();
       if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
       if (currentMode === 'neighborhood') {
         var tInput = document.getElementById('nb-title-input');
         var titleText = tInput.value.trim();
-        if (!titleText) return alert('Enter a post heading title.');
+        if (!titleText) return await unAlert('Enter a post heading title.');
         socket.send(
           JSON.stringify({
             type: 'neighborhood_post',
@@ -1571,7 +1503,7 @@
         document.getElementById('admin-pardon-btn').style.display =
           'inline-block';
         document.getElementById('admin-ban-btn').onclick = function () {
-          if (confirm('Ban ' + p.username + '?'))
+          if (await unConfirm('Ban ' + p.username + '?'))
             socket.send(
               JSON.stringify({ type: 'mod_ban', target: p.username }),
             );
@@ -1597,7 +1529,7 @@
         document.getElementById('admin-pardon-btn').style.display = 'none';
         document.getElementById('admin-timeout-btn').onclick = function () {
           var dur = document.getElementById('admin-timeout-dur').value;
-          var r = prompt('Reason for timeout?');
+          var r = await unPrompt('Reason for timeout?');
           if (r)
             socket.send(
               JSON.stringify({
@@ -1734,7 +1666,7 @@
       var currentPass = document.getElementById('change-pass-current').value;
       var newPass = document.getElementById('change-pass-new').value;
       if (!currentPass || !newPass)
-        return alert('Please fill out both password fields.');
+        return await unAlert('Please fill out both password fields.');
       log('Sending security parameter update packet.');
       var xhr = new XMLHttpRequest();
       xhr.open('POST', BACKEND_URL + '/api/change-password', true);
@@ -1744,9 +1676,9 @@
         if (xhr.readyState === 4) {
           var res = JSON.parse(xhr.responseText);
           if (xhr.status === 200 && res.success) {
-            alert('Password updated!');
+            await unAlert('Password updated!');
             closeInfoModal();
-          } else alert(res.error || 'Failed to update password.');
+          } else await unAlert(res.error || 'Failed to update password.');
         }
       };
       xhr.send(
