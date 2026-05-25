@@ -249,7 +249,8 @@ app.get('/api/mod-logs', authenticateToken, async (req, res) => {
     row.mod_username = sanitize(row.mod_username);
     row.target_username = sanitize(row.target_username);
     if (row.action_type === 'delete') {
-      row.content = (await db.query('SELECT content FROM messages WHERE id = ?;', [row.target_id])).rows[0].content;
+      const dbResult = await db.query('SELECT content FROM messages WHERE id = $1;', [row.target_id]);
+      row.content = dbResult.rows[0].content;
     }
     rows.push(row);
   }
