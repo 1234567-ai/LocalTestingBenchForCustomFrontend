@@ -1,4 +1,4 @@
-const DEBUG = true;
+const DEBUG = false;
 const DO_LOGGING = true;
 var BACKEND_URL = DEBUG
   ? 'http://localhost'
