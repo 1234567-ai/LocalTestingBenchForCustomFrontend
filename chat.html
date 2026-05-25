@@ -7,6 +7,7 @@
   <title>un-reader BBS - Chat</title>
   <link rel="stylesheet" media="screen" href="https://fontlibrary.org/face/symbola/css/symbola.css" type="text/css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.2/purify.min.js"></script>
   <style type="text/css">
     :root {
       --bg-color: #ffffff;
@@ -932,11 +933,9 @@
       if (!text) return '';
       const escaped = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       if (navigator.userAgent.toLowerCase().includes('kindle')) {
-        // TODO: fix the markdown parsing for kindles
-        return escaped;
-        // return parseMarkdownForKindle(escaped);
+        return DOMPurify.sanitize(escaped);
       }
-      return marked.parse(escaped).trim();
+      return DOMPurify.sanitize(marked.parse(escaped)).trim();
     }
 
     function formatTimeToken(unixTimestamp) {

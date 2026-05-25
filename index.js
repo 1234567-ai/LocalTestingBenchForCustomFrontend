@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken'
 import pkg from 'pg'
 import cors from 'cors'
 import fs from 'node:fs'
+import sanitizeHtml from 'sanitize-html'
 
 const { Pool } = pkg
 const JWT_SECRET = process.env.JWT_SECRET || 'brutalist_secret_key_123'
@@ -12,6 +13,20 @@ const DO_LOGGING = true;
 
 function log(...args) {
   if (DO_LOGGING) console.log(`[SERVER]`, ...args);
+}
+
+function sanitize(str, options = {}) {
+  if (typeof str !== 'string') return str;
+  return sanitizeHtml(str.trim(), {
+    allowedTags: options.allowTags ? [ 'b', 'i', 'em', 'strong', 'a', 'p', 'br' ] : [],
+    allowedAttributes: options.allowTags ? { 'a': [ 'href' ] } : {},
+    ...options
+  });
+}
+
+function sanitizeUsername(username) {
+  if (typeof username !== 'string') return username;
+  return username.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 32);
 }
 
 // CORRECT RELEASE URL
@@ -154,7 +169,10 @@ app.get('/dm-contacts', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/register', async (req, res) => {
-  const { username, password } = req.body;
+  let { username, password } = req.body;
+  username = sanitizeUsername(username);
+  if (!username || username.length < 3) return res.status(400).json({ error: 'Username invalid or too short' });
+
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   log(`Registration request: ${username} from ${ip}`);
   try {
@@ -169,7 +187,8 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
+  let { username, password } = req.body;
+  username = sanitizeUsername(username);
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   log(`Login request: ${username} from ${ip}`);
   try {
@@ -189,13 +208,18 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.get('/api/profile/:username', authenticateToken, async (req, res) => {
-  const r = await db.query('SELECT p.*, u.is_admin, u.is_moderator FROM profiles p JOIN users u ON p.username = u.username WHERE p.username = $1;', [req.params.username]);
-  if (!r.rows[0]) return res.json({ username: req.params.username, bio: 'Hello world.', location: 'Cyberspace', avatar_emoji: '👤', is_admin: false, is_moderator: false });
+  const targetUsername = sanitizeUsername(req.params.username);
+  const r = await db.query('SELECT p.*, u.is_admin, u.is_moderator FROM profiles p JOIN users u ON p.username = u.username WHERE p.username = $1;', [targetUsername]);
+  if (!r.rows[0]) return res.json({ username: targetUsername, bio: 'Hello world.', location: 'Cyberspace', avatar_emoji: '👤', is_admin: false, is_moderator: false });
   res.json(r.rows[0]);
 });
 
 app.post('/api/profile', authenticateToken, async (req, res) => {
-  const { bio, location, avatar_emoji } = req.body;
+  let { bio, location, avatar_emoji } = req.body;
+  bio = sanitize(bio);
+  location = sanitize(location);
+  avatar_emoji = sanitize(avatar_emoji);
+  
   await db.query('INSERT INTO profiles (username, bio, location, avatar_emoji) VALUES ($4, $1, $2, $3) ON CONFLICT (username) DO UPDATE SET bio=$1, location=$2, avatar_emoji=$3;', [bio, location, avatar_emoji, req.user.username]);
   res.json({ success: true });
 });
@@ -208,8 +232,9 @@ app.get('/api/mod-logs', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/find-user/:username', authenticateToken, async (req, res) => {
   if (!req.user.is_admin && !req.user.is_moderator) return res.status(403).json({ error: 'Unauthorized' });
-  log(`Admin User-Search: target=${req.params.username} by=${req.user.username} who is admin (${req.user.is_admin}) and moderator (${req.user.is_moderator})`);
-  const r = await db.query('SELECT username, last_ip, timeout_until, is_banned, is_admin, is_moderator FROM users WHERE username = $1;', [req.params.username]);
+  const targetUsername = sanitizeUsername(req.params.username);
+  log(`Admin User-Search: target=${targetUsername} by=${req.user.username} who is admin (${req.user.is_admin}) and moderator (${req.user.is_moderator})`);
+  const r = await db.query('SELECT username, last_ip, timeout_until, is_banned, is_admin, is_moderator FROM users WHERE username = $1;', [targetUsername]);
   if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
   const userInfo = r.rows[0];
   // Find alts (other users with same IP)
@@ -227,20 +252,22 @@ app.get('/api/admin/find-user/:username', authenticateToken, async (req, res) =>
 
 app.post('/api/admin/set-role', authenticateToken, async (req, res) => {
   if (!req.user.is_admin) return res.status(403).json({ error: 'Unauthorized' });
-  const { target, is_moderator } = req.body;
+  let { target, is_moderator } = req.body;
+  target = sanitizeUsername(target);
   log(`Role Assignment: ${target} -> mod=${is_moderator} by=${req.user.username}`);
   await db.query('UPDATE users SET is_moderator = $1 WHERE username = $2;', [is_moderator, target]);
   res.json({ success: true });
 });
 
 app.get('/history', authenticateToken, async (req, res) => {
-  const off = parseInt(req.query.index ?? '0', 10) * 10;
+  const off = Math.max(0, parseInt(req.query.index ?? '0', 10) * 10);
   const r = await db.query('SELECT m.*, u.is_admin, u.is_moderator FROM messages m LEFT JOIN users u ON m.username = u.username ORDER BY m.id DESC LIMIT 10 OFFSET $1;', [off]);
   res.json(r.rows.reverse());
 });
 
 app.get('/dm-history', authenticateToken, async (req, res) => {
-  const off = parseInt(req.query.index ?? '0', 10) * 10;
+  const off = Math.max(0, parseInt(req.query.index ?? '0', 10) * 10);
+  const target = sanitizeUsername(req.query.target);
   // FIX: Force ALIAS and explicit join for name consistency
   const r = await db.query(`
     SELECT d.id, d.sender AS username, d.receiver, d.timestamp, d.content, d.is_deleted, d.deleted_by, u.is_admin, u.is_moderator 
@@ -248,18 +275,19 @@ app.get('/dm-history', authenticateToken, async (req, res) => {
     LEFT JOIN users u ON d.sender = u.username 
     WHERE (d.sender = $1 AND d.receiver = $2) OR (d.sender = $2 AND d.receiver = $1) 
     ORDER BY d.id DESC LIMIT 10 OFFSET $3;
-  `, [req.user.username, req.query.target, off]);
+  `, [req.user.username, target, off]);
   res.json(r.rows.reverse());
 });
 
 app.get('/topic-history', authenticateToken, async (req, res) => {
-  const off = parseInt(req.query.index ?? '0', 10) * 10;
-  const r = await db.query('SELECT tm.*, u.is_admin, u.is_moderator FROM topic_messages tm LEFT JOIN users u ON tm.username = u.username WHERE tm.topic_slug = $1 ORDER BY tm.id DESC LIMIT 10 OFFSET $2;', [req.query.slug, off]);
+  const off = Math.max(0, parseInt(req.query.index ?? '0', 10) * 10);
+  const slug = sanitize(req.query.slug);
+  const r = await db.query('SELECT tm.*, u.is_admin, u.is_moderator FROM topic_messages tm LEFT JOIN users u ON tm.username = u.username WHERE tm.topic_slug = $1 ORDER BY tm.id DESC LIMIT 10 OFFSET $2;', [slug, off]);
   res.json(r.rows.reverse());
 });
 
 app.get('/neighborhood-history', authenticateToken, async (req, res) => {
-  const off = parseInt(req.query.index ?? '0', 10) * 10;
+  const off = Math.max(0, parseInt(req.query.index ?? '0', 10) * 10);
   const query = `
     SELECT p.*, u.is_admin, u.is_moderator, 
     COALESCE(json_agg(json_build_object('id', c.id, 'username', c.username, 'content', c.content, 'timestamp', c.timestamp, 'is_deleted', c.is_deleted, 'deleted_by', c.deleted_by, 'is_admin', cu.is_admin, 'is_moderator', cu.is_moderator) ORDER BY c.id ASC) FILTER (WHERE c.id IS NOT NULL), '[]') as comments 
@@ -287,7 +315,7 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'auth') {
         try {
           const decoded = jwt.verify(data.token, JWT_SECRET);
-          authUser = decoded.username;
+          authUser = sanitizeUsername(decoded.username);
           userRoles = await getUserRoles(authUser);
           log(`WS Auth Session Established: ${authUser} (Admin: ${userRoles.is_admin}, Mod: ${userRoles.is_moderator})`);
           if (userRoles.is_banned || BigInt(userRoles.timeout_until) > BigInt(Date.now())) {
@@ -303,13 +331,37 @@ wss.on('connection', (ws, req) => {
       }
       if (!authUser) return;
 
-      if (['message', 'topic_message', 'dm', 'neighborhood_post', 'neighborhood_comment'].includes(data.type)) {
+      if (['message', 'topic_message', 'dm', 'neighborhood_post', 'neighborhood_comment', 'create_topic'].includes(data.type)) {
         const tStr = String(Date.now());
-        if (data.type === 'message') await db.query('INSERT INTO messages (username, timestamp, content, sender) VALUES ($1, $2, $3, $4);', [authUser, tStr, data.content, authUser]);
-        if (data.type === 'topic_message') await db.query('INSERT INTO topic_messages (topic_slug, username, timestamp, content, sender) VALUES ($1, $2, $3, $4, $5);', [data.target, authUser, tStr, data.content, authUser]);
-        if (data.type === 'dm') await db.query('INSERT INTO dms (sender, receiver, timestamp, content, username) VALUES ($1, $2, $3, $4, $5);', [authUser, data.target, tStr, data.content, authUser]);
-        if (data.type === 'neighborhood_post') await db.query('INSERT INTO neighborhood_posts (username, title, content, timestamp, sender) VALUES ($1, $2, $3, $4, $5);', [authUser, data.title, data.content, tStr, authUser]);
-        if (data.type === 'neighborhood_comment') await db.query('INSERT INTO neighborhood_comments (post_id, username, content, timestamp, sender) VALUES ($1, $2, $3, $4, $5);', [data.post_id, authUser, data.content, tStr, authUser]);
+        if (data.type === 'message') {
+          const content = sanitize(data.content);
+          await db.query('INSERT INTO messages (username, timestamp, content, sender) VALUES ($1, $2, $3, $4);', [authUser, tStr, content, authUser]);
+        }
+        if (data.type === 'topic_message') {
+          const content = sanitize(data.content);
+          const target = sanitize(data.target);
+          await db.query('INSERT INTO topic_messages (topic_slug, username, timestamp, content, sender) VALUES ($1, $2, $3, $4, $5);', [target, authUser, tStr, content, authUser]);
+        }
+        if (data.type === 'dm') {
+          const content = sanitize(data.content);
+          const target = sanitizeUsername(data.target);
+          await db.query('INSERT INTO dms (sender, receiver, timestamp, content, username) VALUES ($1, $2, $3, $4, $5);', [authUser, target, tStr, content, authUser]);
+        }
+        if (data.type === 'neighborhood_post') {
+          const title = sanitize(data.title);
+          const content = sanitize(data.content);
+          await db.query('INSERT INTO neighborhood_posts (username, title, content, timestamp, sender) VALUES ($1, $2, $3, $4, $5);', [authUser, title, content, tStr, authUser]);
+        }
+        if (data.type === 'neighborhood_comment') {
+          const content = sanitize(data.content);
+          const post_id = parseInt(data.post_id, 10);
+          await db.query('INSERT INTO neighborhood_comments (post_id, username, content, timestamp, sender) VALUES ($1, $2, $3, $4, $5);', [post_id, authUser, content, tStr, authUser]);
+        }
+        if (data.type === 'create_topic') {
+          const title = sanitize(data.title);
+          const slug = title.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 50);
+          await db.query('INSERT INTO topics (slug, title, username, timestamp) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING;', [slug, title, authUser, tStr]);
+        }
         broadcastSystemUpdate({ type: 'refresh_feed' });
       }
 
@@ -339,10 +391,11 @@ wss.on('connection', (ws, req) => {
         const canDelete = isOwner || userRoles.is_admin || userRoles.is_moderator;
 
         if (data.type === 'mod_delete' && canDelete) {
+          const reason = sanitize(data.reason || 'No reason provided');
           log(`EXECUTING DATA PURGE: targetId=${data.id} in ${targetTable} by=${authUser}`);
           await db.query(`UPDATE ${targetTable} SET is_deleted = true, deleted_by = $1 WHERE id = $2;`, [authUser, data.id]);
           if (!isOwner && userRoles.is_moderator && !userRoles.is_admin) {
-            await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, target_id, reason, timestamp) VALUES ($1, $2, $3, $4, $5, $6);', [authUser, 'delete', owner, data.id, data.reason || 'No reason provided', Date.now()]);
+            await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, target_id, reason, timestamp) VALUES ($1, $2, $3, $4, $5, $6);', [authUser, 'delete', owner, data.id, reason, Date.now()]);
           }
           broadcastSystemUpdate({ type: 'refresh_feed' });
         } else if (data.type === 'mod_restore' && canUndo) {
@@ -356,22 +409,27 @@ wss.on('connection', (ws, req) => {
 
       if (userRoles.is_admin || userRoles.is_moderator) {
         if (data.type === 'mod_timeout') {
-          const targetRoles = await getUserRoles(data.target);
+          const target = sanitizeUsername(data.target);
+          const targetRoles = await getUserRoles(target);
           if (targetRoles.is_admin) return ws.send(JSON.stringify({ type: 'error_alert', message: 'System operator immunity detected.' }));
-          log(`USER TIMEOUT: target=${data.target}, duration=${data.duration}m, by=${authUser}`);
-          await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (parseInt(data.duration, 10) * 60 * 1000), data.target]);
-          if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', data.target, data.reason || 'No reason provided', Date.now()]);
-          if (activeClients.has(data.target)) { activeClients.get(data.target).send(JSON.stringify({ type: 'terminated' })); activeClients.get(data.target).close(); }
+          const duration = Math.min(Math.max(1, parseInt(data.duration, 10)), 43200); // Max 30 days
+          const reason = sanitize(data.reason || 'No reason provided');
+          log(`USER TIMEOUT: target=${target}, duration=${duration}m, by=${authUser}`);
+          await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (duration * 60 * 1000), target]);
+          if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', target, reason, Date.now()]);
+          if (activeClients.has(target)) { activeClients.get(target).send(JSON.stringify({ type: 'terminated' })); activeClients.get(target).close(); }
         }
         if (userRoles.is_admin) {
           if (data.type === 'mod_ban') {
-            log(`ADMIN BAN: target=${data.target}, by=${authUser}`);
-            await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [data.target]);
-            if (activeClients.has(data.target)) activeClients.get(data.target).close();
+            const target = sanitizeUsername(data.target);
+            log(`ADMIN BAN: target=${target}, by=${authUser}`);
+            await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [target]);
+            if (activeClients.has(target)) activeClients.get(target).close();
           }
           if (data.type === 'mod_pardon') {
-            log(`ADMIN PARDON: target=${data.target}, by=${authUser}`);
-            await db.query('UPDATE users SET is_banned = false, timeout_until = 0 WHERE username = $1;', [data.target]);
+            const target = sanitizeUsername(data.target);
+            log(`ADMIN PARDON: target=${target}, by=${authUser}`);
+            await db.query('UPDATE users SET is_banned = false, timeout_until = 0 WHERE username = $1;', [target]);
           }
         }
       }
@@ -379,3 +437,4 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('close', () => { if (authUser) { log(`WS Terminal closed: ${authUser}`); activeClients.delete(authUser); broadcastSystemUpdate({ type: 'roster_update', users: Array.from(activeClients.keys()) }); } });
 });
+

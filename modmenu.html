@@ -4,6 +4,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>un-reader BBS - Moderation Console</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.2/purify.min.js"></script>
     <link
       rel="stylesheet"
       media="screen"
@@ -558,7 +559,8 @@
               logs.forEach(function (l) {
                 var div = document.createElement('div');
                 div.className = 'mod-log-item';
-                div.textContent = `[${formatTimeToken(l.timestamp)}] ${l.mod_username}: ${l.action_type.toUpperCase()} on ${l.target_username || 'ID ' + l.target_id} | Reason: ${l.reason}`;
+                var safeText = DOMPurify.sanitize(`[${formatTimeToken(l.timestamp)}] ${l.mod_username}: ${l.action_type.toUpperCase()} on ${l.target_username || 'ID ' + l.target_id} | Reason: ${l.reason}`);
+                div.innerHTML = safeText;
                 list.appendChild(div);
               });
             } else {
@@ -589,27 +591,32 @@
                   ? 'TIMED OUT'
                   : 'ACTIVE';
 
+              var safeUsername = DOMPurify.sanitize(u.username);
+              var safeIP = DOMPurify.sanitize(u.last_ip || 'Unknown');
+              var safeStatus = DOMPurify.sanitize(status);
+              var safeAlts = u.alts ? DOMPurify.sanitize(u.alts.join(', ')) : '';
+
               var html = `<div style="line-height: 1.5;">
-              <strong>Username:</strong> ${u.username}<br>
-              <strong>Last IP:</strong> ${u.last_ip || 'Unknown'}<br>
-              <strong>Status:</strong> ${status}<br>
+              <strong>Username:</strong> ${safeUsername}<br>
+              <strong>Last IP:</strong> ${safeIP}<br>
+              <strong>Status:</strong> ${safeStatus}<br>
               <strong>Roles:</strong> Admin: ${u.is_admin}, Mod: ${u.is_moderator}<br>`;
               // Show alts if any
               if (u.alts && u.alts.length > 0) {
-                html += `<strong>Alt Accounts:</strong> ${u.alts.join(', ')}<br>`;
+                html += `<strong>Alt Accounts:</strong> ${safeAlts}<br>`;
               }
               html += `<br>
               <div style="border-top: 1px dotted black; padding-top:8px; margin-top:8px;">
                 <strong>Operator Timeout:</strong><br>
                 Duration (mins): <input type="number" id="admin-timeout-dur" value="60" style="width: 40px; font-family:monospace; padding:2px; border:1px solid black; background:white;">
-                <button class="retro-btn" onclick="submitTimeout('${u.username}')">TIMEOUT</button>
+                <button class="retro-btn" onclick="submitTimeout('${safeUsername}')">TIMEOUT</button>
               </div>`;
               if (userRoles.is_admin) {
                 html += `<div style="border-top: 1px dotted black; padding-top:8px; margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
-                <button class="retro-btn" onclick="setModeratorAction('${u.username}', ${!u.is_moderator})">${u.is_moderator ? 'REMOVE MOD ROLE' : 'PROMOTE TO MOD'}</button>
-                <button class="retro-btn danger-btn" onclick="adminAction('mod_ban', '${u.username}')">BAN USER</button>
-                <button class="retro-btn" onclick="adminAction('mod_pardon', '${u.username}')">PARDON USER</button>
-                <button class="retro-btn danger-btn" onclick="banIP('${u.username}')">BAN IP</button>
+                <button class="retro-btn" onclick="setModeratorAction('${safeUsername}', ${!u.is_moderator})">${u.is_moderator ? 'REMOVE MOD ROLE' : 'PROMOTE TO MOD'}</button>
+                <button class="retro-btn danger-btn" onclick="adminAction('mod_ban', '${safeUsername}')">BAN USER</button>
+                <button class="retro-btn" onclick="adminAction('mod_pardon', '${safeUsername}')">PARDON USER</button>
+                <button class="retro-btn danger-btn" onclick="banIP('${safeUsername}')">BAN IP</button>
               </div>`;
               }
               html += `</div>`;

@@ -7,6 +7,7 @@
   <title>un-reader BBS - Neighbourhood</title>
   <link rel="stylesheet" media="screen" href="https://fontlibrary.org/face/symbola/css/symbola.css" type="text/css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.2/purify.min.js"></script>
   <style type="text/css">
     :root {
       --bg-color: #ffffff;
@@ -913,11 +914,9 @@
       if (!text) return '';
       const escaped = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       if (navigator.userAgent.toLowerCase().includes('kindle')) {
-        // TODO: fix the markdown parsing for kindles
-        return escaped;
-        // return parseMarkdownForKindle(escaped);
+        return DOMPurify.sanitize(escaped);
       }
-      return marked.parse(escaped).trim();
+      return DOMPurify.sanitize(marked.parse(escaped)).trim();
     }
 
     function formatTimeToken(unixTimestamp) {
@@ -1083,9 +1082,10 @@
         var timeStr = formatTimeToken(data.timestamp);
         var effectiveUsername =
           data.username || data.sender || 'UNKNOWN_NODE';
-        var nameDisplay =
+        var nameDisplay = DOMPurify.sanitize(
           (data.is_admin ? 'ADMIN ' : data.is_moderator ? 'MOD ' : '') +
-          effectiveUsername;
+          effectiveUsername
+        );
         box.innerHTML =
           '<div class="nb-header" style="cursor:pointer;">@' +
           nameDisplay +
@@ -1113,7 +1113,7 @@
         box.querySelector('.nb-header').onclick = function () {
           openProfileModal(effectiveUsername);
         };
-        box.querySelector('.nb-title').textContent = parseMarkup(data.title);
+        box.querySelector('.nb-title').innerHTML = parseMarkup(data.title);
         box.querySelector('.message-text').innerHTML = parseMarkup(data.content);
         var cList = box.querySelector('.comment-list');
         if (data.comments && data.comments.length > 0) {
@@ -1126,9 +1126,10 @@
             } else {
               var cEffectiveUsername =
                 c.username || c.sender || 'UNKNOWN_NODE';
-              var cName =
+              var cName = DOMPurify.sanitize(
                 (c.is_admin ? 'ADMIN ' : c.is_moderator ? 'MOD ' : '') +
-                cEffectiveUsername;
+                cEffectiveUsername
+              );
               cDiv.innerHTML =
                 '<strong style="cursor:pointer;">@' +
                 cName +
