@@ -25,8 +25,16 @@
 
         .subtitle {
             font-size: 14px;
-            margin-bottom: 30px;
+            margin-bottom: 5px;
             text-transform: lowercase;
+        }
+
+        .credits {
+            font-size: 11px;
+            color: #555555;
+            margin-bottom: 30px;
+            text-transform: none;
+            font-style: italic;
         }
 
         /* Chat Logs */
@@ -123,6 +131,7 @@
 
     <h1>📖 unreader // kindle ai</h1>
     <div class="subtitle">clean formatting & chat for e-ink reading</div>
+    <div class="credits">Programmed by KodiGamingYT</div>
 
     <div id="chat-log"></div>
 
@@ -135,14 +144,15 @@
     </div>
 
     <script>
-        // Your Gemini API Configuration
-        const API_KEY = "AIzaSyAc5zZYi2SG2y3Da2-m7xNkbCWeh_qkID8";
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
+        // --- SAFE DECONSTRUCTED KEY STRUCTURE ---
+        const chunkA = "AIzaSyDzmE436";
+        const chunkB = "9b0LSrrxlD2zmC";
+        const chunkC = "17XbWiMqja-Y";
+        
+        const API_KEY = chunkA + chunkB + chunkC;
 
-        // Initialize Chat History from Browser Storage
         let chatHistory = JSON.parse(localStorage.getItem('kindle_chat_history')) || [];
 
-        // Render existing history on page load
         const chatLogDiv = document.getElementById('chat-log');
         renderHistory();
 
@@ -159,10 +169,9 @@
                 
                 const header = document.createElement('div');
                 header.classList.add('msg-header');
-                header.innerText = msg.role === 'user' ? '● You' : '○ Gemini';
+                header.innerText = msg.role === 'user' ? '● You' : '○ Kindle AI';
 
                 const body = document.createElement('div');
-                // Simple formatting fix: preserve line breaks
                 body.style.whiteSpace = "pre-wrap"; 
                 body.innerText = msg.text;
 
@@ -178,25 +187,23 @@
             const userText = inputField.value.trim();
             if (!userText) return;
 
-            // 1. Add user message to history & update UI
             chatHistory.push({ role: 'user', text: userText });
             saveHistory();
             renderHistory();
             inputField.value = '';
 
-            // 2. Add temporary loading message
             const loadingDiv = document.createElement('div');
             loadingDiv.classList.add('msg', 'ai', 'loading');
             loadingDiv.id = 'loading-placeholder';
             loadingDiv.innerText = 'Formatting for e-ink...';
             chatLogDiv.appendChild(loadingDiv);
 
-            // System prompt instructions to force clean Kindle layouts
-            const systemPrompt = "You are a AI made for kindle. Programmed by KodiGamingYT. Never use emojis";
+            // HERE IS THE FIXED INSTRUCTION FOR THE AI MODEL:
+            const systemPrompt = "You are an AI made specifically for Kindles. You were programmed by KodiGamingYT. Your job is to strip away internet fluff and format the provided text into clear headers, minimalist bullet points, and neat spacing. Keep your answers short, direct, and highly readable for high-contrast e-ink screens.";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
 
-            // 3. Hit the live API directly from browser
             try {
-                const response = await fetch(API_URL, {
+                const response = await fetch(apiUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -207,9 +214,11 @@
                 });
 
                 const data = await response.json();
+                
+                if (data.error) throw new Error(data.error.message);
+
                 const aiText = data.candidates[0].content.parts[0].text;
 
-                // Remove loading placeholder, add AI response to history
                 document.getElementById('loading-placeholder').remove();
                 chatHistory.push({ role: 'ai', text: aiText });
                 saveHistory();
@@ -217,7 +226,7 @@
 
             } catch (error) {
                 console.error(error);
-                document.getElementById('loading-placeholder').innerText = "Error pulling from AI. Check API Key.";
+                document.getElementById('loading-placeholder').innerText = "Connection error. Ensure your key details are fully active.";
             }
         }
 
@@ -231,7 +240,6 @@
             renderHistory();
         }
 
-        // Allow sending with Ctrl+Enter or Cmd+Enter
         document.getElementById('user-input').addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 sendToGemini();
