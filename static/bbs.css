@@ -177,8 +177,7 @@
 }
 
 #send {
-  width: 5em;
-  min-width: max-content;
+  min-width: calc(max-content+1em);
   aspect-ratio: 1;
   cursor: pointer;
   font-family: monospace;
