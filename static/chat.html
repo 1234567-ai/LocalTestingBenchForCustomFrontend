@@ -754,7 +754,9 @@
           dBtn.className = "mod-tray-btn";
           dBtn.textContent = "PURGE";
           dBtn.onclick = async function () {
-            var r = await unPrompt("Reason for purge?");
+            var r = userRoles.is_admin
+              ? "Admin doesn't need any reasons"
+              : await unPrompt('Reason for purge?');
             if (r !== null) sendModAction("mod_delete", data.id, r);
           };
           trayDiv.appendChild(dBtn);
@@ -931,16 +933,17 @@
           };
           document.getElementById("admin-timeout-btn").onclick = async function () {
             var dur = document.getElementById("admin-timeout-dur").value;
-            var r = await unPrompt("Reason for timeout?");
-            if (r)
-              socket.send(
-                JSON.stringify({
-                  type: "mod_timeout",
-                  target: p.username,
-                  duration: dur,
-                  reason: r,
-                }),
-              );
+            var r = userRoles.is_admin
+              ? "Admin doesn't need any reasons"
+              : await unPrompt('Reason for timeout?');
+            socket.send(
+              JSON.stringify({
+                type: "mod_timeout",
+                target: p.username,
+                duration: dur,
+                reason: r,
+              }),
+            );
           };
         } else if (userRoles.is_moderator && !isSelf) {
           document.getElementById("admin-controls").style.display = "block";
@@ -948,7 +951,9 @@
           document.getElementById("admin-pardon-btn").style.display = "none";
           document.getElementById("admin-timeout-btn").onclick = async function () {
             var dur = document.getElementById("admin-timeout-dur").value;
-            var r = await unPrompt("Reason for timeout?");
+            var r = userRoles.is_admin
+              ? "Admin doesn't need any reasons"
+              : await unPrompt('Reason for timeout?');
             if (r)
               socket.send(
                 JSON.stringify({

@@ -325,7 +325,7 @@
         socket.onmessage = async function (event) {
           var data = JSON.parse(event.data);
           if (data.type === 'terminated') {
-            await unAlert('Session terminated.');
+            await unAlert(data.reason || 'Session terminated.');
             window.location.href = 'index.html';
             return;
           }
@@ -376,7 +376,11 @@
               logs.forEach(function (l) {
                 var div = document.createElement('div');
                 div.className = 'mod-log-item';
-                var safeText = DOMPurify.sanitize(`[${formatTimeToken(l.timestamp)}] ${l.mod_username}: ${l.action_type.toUpperCase()} on ${l.target_username || 'ID ' + l.target_id} | Reason: ${l.reason} ${l.action_type === 'delete' ? '| Content: ' + l.content : ''}`);
+                var safeText = DOMPurify.sanitize(
+                  `[${formatTimeToken(l.timestamp)}] ${l.mod_username}:`
+                  + ` ${l.action_type.toUpperCase()} on ${l.target_username || 'ID ' + l.target_id}`
+                  + ` | Reason: ${l.reason} ${l.action_type === 'delete' ? '| Content: ' + l.content : ''}`
+                );
                 div.innerHTML = safeText;
                 list.appendChild(div);
               });
@@ -470,7 +474,7 @@
         var dur = document.getElementById('admin-timeout-dur').value;
         if (!socket || socket.readyState !== WebSocket.OPEN)
           return await unAlert('Socket offline.');
-        var reason = userRoles.is_admin ? '' : await unPrompt('Reason for timeout?');
+        var reason = userRoles.is_admin ? 'Admin doesn\'t need any reasons' : await unPrompt('Reason for timeout?');
         if (!userRoles.is_admin && !reason) return;
         var payload = {
           type: 'mod_timeout',

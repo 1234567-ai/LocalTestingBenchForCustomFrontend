@@ -456,19 +456,24 @@ wss.on('connection', (ws, req) => {
           const targetRoles = await getUserRoles(target);
           if (targetRoles.is_admin) return ws.send(JSON.stringify({ type: 'error_alert', message: 'System operator immunity detected.' }));
           const duration = Math.min(Math.max(1, parseInt(data.duration, 10)), 43200); // Max 30 days
-          const reason = sanitize(data.reason || 'No reason provided');
+          const reason = userRoles.is_admin ? 'Admin doesn\'t need any reasons' : sanitize(data.reason || 'No reason provided');
           log(`USER TIMEOUT: target=${target}, duration=${duration}m, by=${authUser}`);
           await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (duration * 60 * 1000), target]);
-          if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', target, reason, Date.now()]);
-          if (activeClients.has(target)) { activeClients.get(target).ws.send(JSON.stringify({ type: 'terminated' })); activeClients.get(target).ws.close(); }
+          await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', target, reason, Date.now()]);
+          if (activeClients.has(target)) {
+            activeClients.get(target).ws.send(JSON.stringify({ type: 'terminated', reason: 'You were timed out by a moderator.' }));
+            activeClients.get(target).ws.close();
+          }
         }
         if (data.type === 'mod_kick') {
           if (activeClients.has(data.target)) {
             const client = activeClients.get(data.target);
+            const reason = userRoles.is_admin ? 'Admin doesn\'t need any reasons' : sanitize(data.reason || 'No reason provided');
             client.ws.send(JSON.stringify({ type: 'terminated', reason: 'You were kicked by a moderator.' }));
             client.ws.close();
             activeClients.delete(data.target);
             broadcastSystemUpdate(getRosterPayload());
+            await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'kick', target, reason, Date.now()]);
           } else {
             log(`KICK TARGET ${data.target} NOT CONNECTED`, data.target);
           }
@@ -476,9 +481,14 @@ wss.on('connection', (ws, req) => {
         if (userRoles.is_admin) {
           if (data.type === 'mod_ban') {
             const target = sanitizeUsername(data.target);
+            const reason = userRoles.is_admin ? 'Admin doesn\'t need any reasons' : sanitize(data.reason || 'No reason provided');
             log(`ADMIN BAN: target=${target}, by=${authUser}`);
             await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [target]);
-            if (activeClients.has(target)) activeClients.get(target).ws.close();
+            await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'ban', target, reason, Date.now()]);
+            if (activeClients.has(target)) {
+              activeClients.get(target).ws.send(JSON.stringify({ type: 'terminated', reason: 'You were banned by a moderator.' }));
+              activeClients.get(target).ws.close();
+            }
           }
           if (data.type === 'mod_pardon') {
             const target = sanitizeUsername(data.target);
