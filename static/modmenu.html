@@ -3,7 +3,7 @@
 
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>un-reader BBS - Moderation Console</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.2/purify.min.js"></script>
   <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
@@ -12,22 +12,25 @@
   <link rel="stylesheet" href="bbs.css" />
   <script src="common.js"></script>
   <style type="text/css">
+    /* --- Layout & Architecture Overrides --- */
     #console-cell {
-      padding: 15px;
-      background-color: #ffffff;
+      padding: 20px;
+      background-color: var(--bg-color);
       height: 100%;
       box-sizing: border-box;
+      overflow-y: auto;
     }
 
     .panel-header {
       font-weight: bold;
-      padding: 6px 8px;
+      padding: 8px 12px;
       text-transform: uppercase;
-      border-bottom: var(--border);
-      border-top: var(--border);
-      background: #eee;
-      font-size: 10px;
+      border-bottom: var(--border-width) solid var(--border-color);
+      border-top: var(--border-width) solid var(--border-color);
+      background: var(--bg-color);
+      font-size: 11px;
       letter-spacing: 1px;
+      opacity: 0.8;
     }
 
     .panel-header:first-child {
@@ -35,135 +38,139 @@
     }
 
     .nav-item {
-      padding: 6px 10px;
+      padding: 10px 14px;
       cursor: pointer;
-      border-bottom: 1px solid #eee;
-      font-size: 11px;
-      background: white;
+      border-bottom: 1px dashed var(--border-color);
+      font-size: 13px;
+      background: var(--bg-color);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .nav-item:hover {
-      background: #f0f0f0;
+    .nav-item:hover,
+    .nav-item:active {
+      background: var(--text-color);
+      color: var(--bg-color);
     }
 
-    /* Dual pane design */
+    /* Professional Responsive Dual Pane */
     .dual-pane {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 15px;
-      height: 100%;
+      gap: 20px;
       width: 100%;
+    }
+
+    @media (min-width: 768px) {
+      .dual-pane {
+        flex-direction: row;
+      }
     }
 
     .lookup-pane,
     .logs-pane {
-      flex: 1 0 40%;
+      flex: 1;
       box-sizing: border-box;
-      border: var(--border);
-      padding: 12px;
+      border: var(--border-width) solid var(--border-color);
+      padding: 16px;
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      background: white;
-      min-height: 40%;
+      background: var(--bg-color);
     }
 
     .pane-title {
-      font-size: 13px;
+      font-size: 15px;
       font-weight: bold;
-      border-bottom: var(--border);
-      padding-bottom: 6px;
-      margin-bottom: 12px;
+      border-bottom: var(--border-width) solid var(--border-color);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .form-group {
-      margin-bottom: 10px;
+      margin-bottom: 14px;
     }
 
     .form-group label {
       display: block;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: bold;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
     }
 
     .retro-input {
       box-sizing: border-box;
       width: 100%;
-      padding: 6px;
-      font-family: monospace;
-      border: var(--border);
+      padding: 10px;
+      font-family: inherit;
+      border: var(--border-width) solid var(--border-color);
       outline: none;
-      background: white;
+      background: var(--bg-color);
+      color: var(--text-color);
     }
 
     .retro-btn {
-      font-family: monospace;
-      font-size: 11px;
+      font-family: inherit;
+      font-size: 13px;
       font-weight: bold;
-      background: white;
-      border: var(--border);
-      padding: 6px 10px;
+      background: var(--bg-color);
+      color: var(--text-color);
+      border: var(--border-width) solid var(--border-color);
+      padding: 10px 16px;
       cursor: pointer;
-      box-shadow: 2px 2px 0 black;
+      text-transform: uppercase;
     }
 
     .retro-btn:active {
-      box-shadow: none;
-      transform: translate(2px, 2px);
+      background: var(--text-color);
+      color: var(--bg-color);
     }
 
     .danger-btn {
-      background: #ffcccc !important;
-      color: #770000;
+      border-color: #ff0000 !important;
+    }
+    
+    body.dark-mode .danger-btn {
+      border-color: #ff3333 !important;
     }
 
     #user-search-results {
       flex-grow: 1;
-      margin-top: 10px;
-      padding: 8px;
-      border: 1px dashed black;
-      background: #fafafa;
-      font-size: 11px;
-      font-family: monospace;
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px dashed var(--border-color);
+      background: var(--bg-color);
+      font-size: 13px;
       overflow-y: auto;
-      min-height: 0px;
     }
 
     #mod-log-list {
       flex-grow: 1;
       overflow-y: auto;
-      border: 1px solid black;
-      background: #fafafa;
-      padding: 8px;
-      font-size: 10px;
-      font-family: monospace;
-      min-height: 0px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-color);
+      padding: 12px;
+      font-size: 12px;
+      min-height: 250px;
     }
 
     .mod-log-item {
-      border-bottom: 1px dotted black;
-      padding: 5px 0;
-      line-height: 1.3;
+      border-bottom: 1px dotted var(--border-color);
+      padding: 8px 0;
+      line-height: 1.4;
     }
 
-    /* E-Ink / Brutalist Dark Mode adjustments */
+    /* Theme Engine Adaptability overrides */
     body.dark-mode {
       --bg-color: #121212;
       --text-color: #ffffff;
-      --border: 2px solid #ffffff;
-      --shadow: 4px 4px 0px #ffffff;
-      --stripe-pattern: repeating-linear-gradient(0deg,
-          transparent,
-          transparent 2px,
-          #fff 3px,
-          #fff 4px);
-      background-color: #242424 !important;
+      --border-color: #ffffff;
+      background-color: #121212 !important;
     }
 
     body.dark-mode .window,
@@ -179,42 +186,31 @@
     body.dark-mode #user-search-results,
     body.dark-mode #mod-log-list,
     body.dark-mode .mod-log-item {
-      background-color: #121212 !important;
-      color: #ffffff !important;
-      border-color: #ffffff !important;
+      background-color: var(--bg-color) !important;
+      color: var(--text-color) !important;
+      border-color: var(--border-color) !important;
     }
 
     body.dark-mode #sidebar-cell {
       background-color: #1a1a1a !important;
-      border-right-color: #ffffff !important;
+      border-right: var(--border-width) solid var(--border-color) !important;
     }
 
     body.dark-mode #console-cell {
-      background-color: #121212 !important;
+      background-color: var(--bg-color) !important;
     }
 
     body.dark-mode .panel-header {
       background-color: #222222 !important;
-      color: #ffffff !important;
-      border-color: #ffffff !important;
-    }
-
-    body.dark-mode .danger-btn {
-      background: #770000 !important;
-      color: #ffcccc !important;
-    }
-
-    body.dark-mode .mod-log-item {
-      border-bottom-color: #333 !important;
+      color: var(--text-color) !important;
+      border-color: var(--border-color) !important;
     }
 
     body.contrast-medium {
-      --border: 3px solid var(--text-color);
       --border-width: 3px;
     }
 
     body.contrast-high {
-      --border: 4px solid var(--text-color);
       --border-width: 4px;
     }
   </style>
@@ -245,16 +241,11 @@
         </div>
 
         <div class="panel-header">Status</div>
-        <div style="
-                padding: 10px;
-                font-size: 11px;
-                font-weight: bold;
-                font-family: monospace;
-              ">
-          Role:
-          <span id="mod-role-text" style="color: blue">MODERATOR</span>
+        <div style="padding: 12px; font-size: 13px; font-weight: bold;">
+          Role: <span id="mod-role-text" style="color: var(--text-color)">MODERATOR</span>
         </div>
       </div>
+      
       <div id="console-cell">
         <div class="dual-pane">
           <div class="lookup-pane">
@@ -268,14 +259,13 @@
             </button>
 
             <div id="user-search-results">
-              Search a user to access timing out, banning, and promoting
-              action streams.
+              Search a user to access timing out, banning, and promoting action streams.
             </div>
           </div>
 
           <div class="logs-pane">
             <div class="pane-title">🛡️ System Audit Logs</div>
-            <button class="retro-btn" onclick="openModLogs()" style="margin-bottom: 10px">
+            <button class="retro-btn" onclick="openModLogs()" style="margin-bottom: 14px">
               REFRESH AUDIT LOGS
             </button>
             <div id="mod-log-list">Logs loading...</div>
@@ -321,7 +311,6 @@
               userRoles = data.user_roles;
               log('Mod console roles synced:', userRoles);
 
-              // Security verification
               if (!userRoles.is_admin && !userRoles.is_moderator) {
                 await unAlert(
                   'Access Denied: You do not possess structural operator credentials.',
@@ -333,7 +322,7 @@
               document.getElementById('mod-role-text').textContent =
                 userRoles.is_admin ? 'ADMINISTRATOR' : 'MODERATOR';
               document.getElementById('mod-role-text').style.color =
-                userRoles.is_admin ? 'red' : 'blue';
+                userRoles.is_admin ? '#ff0000' : '#0000ff';
             }
             return;
           }
@@ -402,18 +391,17 @@
               <strong>Last IP:</strong> ${safeIP}<br>
               <strong>Status:</strong> ${safeStatus}<br>
               <strong>Roles:</strong> Admin: ${u.is_admin}, Mod: ${u.is_moderator}<br>`;
-              // Show alts if any
               if (u.alts && u.alts.length > 0) {
                 html += `<strong>Alt Accounts:</strong> ${safeAlts}<br>`;
               }
               html += `<br>
-              <div style="border-top: 1px dotted black; padding-top:8px; margin-top:8px;">
+              <div style="border-top: 1px dotted var(--border-color); padding-top:8px; margin-top:8px;">
                 <strong>Operator Timeout:</strong><br>
-                Duration (mins): <input type="number" id="admin-timeout-dur" value="60" style="width: 40px; font-family:monospace; padding:2px; border:1px solid black; background:white;">
+                Duration (mins): <input type="number" id="admin-timeout-dur" value="60" style="width: 50px; padding:4px; border:var(--border-width) solid var(--border-color); background:var(--bg-color); color:var(--text-color);">
                 <button class="retro-btn" onclick="submitTimeout('${safeUsername}')">TIMEOUT</button>
               </div>`;
               if (userRoles.is_admin) {
-                html += `<div style="border-top: 1px dotted black; padding-top:8px; margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+                html += `<div style="border-top: 1px dotted var(--border-color); padding-top:8px; margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
                 <button class="retro-btn" onclick="setModeratorAction('${safeUsername}', ${!u.is_moderator})">${u.is_moderator ? 'REMOVE MOD ROLE' : 'PROMOTE TO MOD'}</button>
                 <button class="retro-btn danger-btn" onclick="adminAction('mod_ban', '${safeUsername}')">BAN USER</button>
                 <button class="retro-btn" onclick="adminAction('mod_pardon', '${safeUsername}')">PARDON USER</button>
@@ -422,7 +410,7 @@
               }
               html += `</div>`;
               res.innerHTML = html;
-              // Apply dark mode styles to dynamic inputs
+
               if (localStorage.getItem('unreader-darkmode') === 'enabled') {
                 res.querySelectorAll('input').forEach((e) => {
                   e.style.backgroundColor = '#121212';
@@ -442,7 +430,6 @@
         var dur = document.getElementById('admin-timeout-dur').value;
         if (!socket || socket.readyState !== WebSocket.OPEN)
           return await unAlert('Socket offline.');
-        // Admins do not need to provide a reason for timeout
         var reason = userRoles.is_admin ? '' : await unPrompt('Reason for timeout?');
         if (!userRoles.is_admin && !reason) return;
         var payload = {
