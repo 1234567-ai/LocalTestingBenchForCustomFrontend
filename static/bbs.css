@@ -80,10 +80,14 @@
   padding: 4px;
   background: white;
   border-bottom: 1px solid #eee;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .sidebar-input {
+  display: block;
   flex-grow: 1;
+  min-width: 0px;
   padding: 3px;
   font-family: monospace;
   font-size: 11px;

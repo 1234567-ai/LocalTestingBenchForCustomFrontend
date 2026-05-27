@@ -350,9 +350,9 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify({ type: 'terminated' })); ws.close(); return;
           }
           activeClients.set(authUser, { ws, mode: 'public', target: '' });
-          broadcastSystemUpdate(getRosterPayload());
           const topicsRes = await db.query('SELECT * FROM topics ORDER BY id DESC;');
           ws.send(JSON.stringify({ type: 'topics_update', topics: topicsRes.rows, user_roles: userRoles }));
+          broadcastSystemUpdate(getRosterPayload());
         } catch (e) { log("WS Authentication Invalid:", e.message); ws.send(JSON.stringify({ type: 'terminated' })); }
         return;
       }
@@ -460,14 +460,25 @@ wss.on('connection', (ws, req) => {
           log(`USER TIMEOUT: target=${target}, duration=${duration}m, by=${authUser}`);
           await db.query('UPDATE users SET timeout_until = $1 WHERE username = $2;', [Date.now() + (duration * 60 * 1000), target]);
           if (!userRoles.is_admin) await db.query('INSERT INTO mod_logs (mod_username, action_type, target_username, reason, timestamp) VALUES ($1, $2, $3, $4, $5);', [authUser, 'timeout', target, reason, Date.now()]);
-          if (activeClients.has(target)) { activeClients.get(target).send(JSON.stringify({ type: 'terminated' })); activeClients.get(target).close(); }
+          if (activeClients.has(target)) { activeClients.get(target).ws.send(JSON.stringify({ type: 'terminated' })); activeClients.get(target).ws.close(); }
+        }
+        if (data.type === 'mod_kick') {
+          if (activeClients.has(data.target)) {
+            const client = activeClients.get(data.target);
+            client.ws.send(JSON.stringify({ type: 'terminated', reason: 'You were kicked by a moderator.' }));
+            client.ws.close();
+            activeClients.delete(data.target);
+            broadcastSystemUpdate(getRosterPayload());
+          } else {
+            log(`KICK TARGET ${data.target} NOT CONNECTED`, data.target);
+          }
         }
         if (userRoles.is_admin) {
           if (data.type === 'mod_ban') {
             const target = sanitizeUsername(data.target);
             log(`ADMIN BAN: target=${target}, by=${authUser}`);
             await db.query('UPDATE users SET is_banned = true WHERE username = $1;', [target]);
-            if (activeClients.has(target)) activeClients.get(target).close();
+            if (activeClients.has(target)) activeClients.get(target).ws.close();
           }
           if (data.type === 'mod_pardon') {
             const target = sanitizeUsername(data.target);

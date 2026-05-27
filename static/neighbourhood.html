@@ -13,8 +13,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.2/purify.min.js"></script>
   <script src="common.js"></script>
   <style type="text/css">
-    #sidebar-cell {
-      overflow-y: auto;
+    #active-users {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     #roster-list {
@@ -570,7 +572,10 @@
           💬 Go to Chat
         </div>
 
-        <div class="panel-header">Active Users</div>
+        <div class="panel-header" id="active-users">
+          <div>Active Users</div>
+          <button class="sidebar-btn" style="margin:0;">KICK ALL</button>
+        </div>
         <div id="roster-list"></div>
 
         <div class="panel-header">System Operations</div>
@@ -807,17 +812,21 @@
       loadHistory();
     }
 
+    var onlineUsers = [];
     function renderUserRoster(userList) {
-      log('Showing users:', userList);
-      var container = document.getElementById('roster-list');
-      container.innerHTML = '';
+      // log("Showing users:", userList);
+      onlineUsers = userList;
+      var container = document.getElementById("roster-list");
+      container.innerHTML = "";
       for (var i = 0; i < userList.length; i++) {
         var u = userList[i];
-        var div = document.createElement('div');
-        div.className = 'roster-user';
-        var span = document.createElement('span');
-        span.className = 'roster-name';
-        var context = u.mode === 'public' ? ' (Global)' : u.mode === 'dm' ? ' (DM @' + u.target + ')' : ' (' + u.target + ')';
+        var div = document.createElement("div");
+        div.className = "roster-user";
+        div.style.display = "flex";
+        div.style.justifyContent = "space-between";
+        var span = document.createElement("span");
+        span.className = "roster-name";
+        var context = u.mode === "public" ? " (Global)" : u.mode === "dm" ? " (DM @" + u.target + ")" : " (" + u.target + ")";
         span.textContent = u.username + context;
         (function (user) {
           span.onclick = function () {
@@ -825,6 +834,19 @@
           };
         })(u);
         div.appendChild(span);
+        log("Showing online user: " + u.username +
+          (u.mode === "public" ? " (Global)" : u.mode === "dm" ? " (DM @" + u.target + ")" : " (" + u.target + ")") +
+          " who " + ((userRoles.is_admin || userRoles.is_moderator) && u.username !== myUsername ? "can" : "cannot") + " be kicked.");
+        if ((userRoles.is_admin || userRoles.is_moderator) && u.username !== myUsername) {
+          const username = u.username;
+          var kick = document.createElement("button");
+          kick.className = "sidebar-btn";
+          kick.textContent = "KICK";
+          kick.onclick = function () {
+            kickUser(username);
+          };
+          div.appendChild(kick);
+        }
         container.appendChild(div);
       }
     }
@@ -1009,6 +1031,22 @@
           reason: reason,
         }),
       );
+    }
+
+    function kickUser(username) {
+      log("Dispatching kick packet for user:", username);
+      socket.send(
+        JSON.stringify({
+          type: "mod_kick",
+          target: username
+        }),
+      );
+    }
+
+    function kickAllUsers() {
+      for (const username of onlineUsers) {
+        if (username !== myUsername) kickUser(username);
+      }
     }
 
     function jumpPage(val) {
