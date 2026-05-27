@@ -11,12 +11,12 @@ function log(...args) {
   if (DO_LOGGING) console.log(`[CLIENT]`, ...args);
 }
 
-function hide(element) {
-  element.classList.add('hide');
+function hide(selector) {
+  document.querySelector(selector).classList.add('hide');
 }
 
-function show(element) {
-  element.classList.remove('hide');
+function show(selector) {
+  document.querySelector(selector).classList.remove('hide');
 }
 
 function applySavedPreferences() {
@@ -30,10 +30,7 @@ function applySavedPreferences() {
     localStorage.getItem('unreader-username') &&
     !localStorage.getItem('username')
   ) {
-    localStorage.setItem(
-      'username',
-      localStorage.getItem('unreader-username'),
-    );
+    localStorage.setItem('username', localStorage.getItem('unreader-username'));
   }
   if (
     localStorage.getItem('token') &&
@@ -45,26 +42,19 @@ function applySavedPreferences() {
     localStorage.getItem('username') &&
     !localStorage.getItem('unreader-username')
   ) {
-    localStorage.setItem(
-      'unreader-username',
-      localStorage.getItem('username'),
-    );
+    localStorage.setItem('unreader-username', localStorage.getItem('username'));
   }
 
   if (localStorage.getItem('unreader-darkmode') === 'enabled') {
     document.body.classList.add('dark-mode');
   }
-  const savedContrast =
-    localStorage.getItem('unreader-contrast') || 'normal';
+  const savedContrast = localStorage.getItem('unreader-contrast') || 'normal';
   if (savedContrast !== 'normal') {
     document.body.classList.add(`contrast-${savedContrast}`);
   }
   const savedFont = localStorage.getItem('unreader-font') || 'sans';
   if (savedFont === 'mono') {
-    document.documentElement.style.setProperty(
-      '--body-font',
-      'monospace',
-    );
+    document.documentElement.style.setProperty('--body-font', 'monospace');
     document.body.style.fontFamily = 'monospace';
   }
 }
@@ -72,7 +62,10 @@ function applySavedPreferences() {
 function parseMarkdownForKindle(text) {
   if (!text) return '';
   // replace bold text: '**text**' -> '<strong>text</strong>'
-  text = text.replace(/([\*_])([\*_](.*?)[\*_])([\*_])/g, '<strong>$2</strong>');
+  text = text.replace(
+    /([\*_])([\*_](.*?)[\*_])([\*_])/g,
+    '<strong>$2</strong>',
+  );
   // replace italic text: '*text*' -> '<i>text</i>'
   text = text.replace(/([\*_])(.*?)([\*_])/g, '<i>$2</i>');
   // replace links: '[text](url)' -> '<a href="url">text</a>'

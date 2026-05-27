@@ -389,7 +389,7 @@
 
         <div class="panel-header" id="active-users">
           <div>Active Users</div>
-          <button class="sidebar-btn hide" style="margin:0;">KICK ALL</button>
+          <button id='kick-all-btn' class="sidebar-btn hide" style="margin:0;" onclick='kickAllUsers()'>KICK ALL</button>
         </div>
         <div id="roster-list"></div>
 
@@ -529,6 +529,12 @@
             window.location.reload();
             return;
           }
+          if (data.type === "auth_success") {
+            if (data.userRoles.is_admin) {
+              show('#kick-all-btn')
+            }
+            return;
+          }
           if (data.type === "error_alert") {
             await unAlert(data.message);
             return;
@@ -598,8 +604,12 @@
           div.appendChild(span);
           log("Showing online user: " + u.username +
             (u.mode === "public" ? " (Global)" : u.mode === "dm" ? " (DM @" + u.target + ")" : " (" + u.target + ")") +
-            " who " + ((userRoles.is_admin || userRoles.is_moderator) && u.username !== myUsername ? "can" : "cannot") + " be kicked.");
-          if ((userRoles.is_admin || userRoles.is_moderator) && u.username !== myUsername) {
+            " who " + ((userRoles.is_admin || userRoles.is_moderator)
+              && u.username !== myUsername ? "can" : "cannot") + " be kicked.");
+          if (userRoles.is_admin ||
+            (userRoles.is_moderator
+              && !u.userRoles.is_admin
+              && u.username !== myUsername)) {
             const username = u.username;
             var kick = document.createElement("button");
             kick.className = "sidebar-btn";
@@ -802,8 +812,10 @@
       }
 
       function kickAllUsers() {
-        for (const username of onlineUsers) {
-          if (username !== myUsername) kickUser(username);
+        for (const user of onlineUsers) {
+          const username = user.username;
+          if (username === myUsername || user.userRoles.is_admin) continue;
+          kickUser(username);
         }
       }
 
