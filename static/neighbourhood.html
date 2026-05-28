@@ -23,52 +23,6 @@
         align-items: center;
       }
 
-      #roster-list {
-        max-height: 250px;
-        overflow-y: auto;
-        background: white;
-      }
-
-      .roster-user {
-        padding: 4px 8px;
-        border-bottom: 1px solid #eee;
-        font-size: 11px;
-      }
-
-      .roster-name {
-        font-weight: bold;
-        cursor: pointer;
-        text-decoration: underline;
-      }
-
-      .nav-item {
-        padding: 6px 10px;
-        cursor: pointer;
-        border-bottom: 1px solid #eee;
-        font-size: 11px;
-        background: white;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .nav-item:hover {
-        background: #f0f0f0;
-      }
-
-      .mod-indicator-btn {
-        background: #fff;
-        border: 2px dashed red !important;
-        color: red;
-        width: 95%;
-        font-weight: bold;
-        font-family: monospace;
-        font-size: 11px;
-        cursor: pointer;
-        padding: 4px 0;
-        text-align: center;
-      }
-
       .mod-indicator-active {
         background: red !important;
         color: white !important;
@@ -1030,20 +984,20 @@
             '</div>' +
             '<div class="nb-title"></div>' +
             '<div class="message-text" style="font-size:13px; margin-bottom:10px;"></div>' +
-            '<button class="comment-toggle-btn" onclick="toggleCommentsSection(' +
+            '<button class="paper-btn" onclick="toggleCommentsSection(' +
             data.id +
-            ')">[Comments]</button>' +
+            ')">Comments</button>' +
             '<div class="comment-area" id="comment-area-for-' +
             data.id +
             '">' +
             '<div class="comment-list"></div>' +
             '<div style="margin-top:6px; display:flex;">' +
-            '<input type="text" placeholder="Write response..." id="input-comment-for-' +
+            '<input type="text" class="paper-input" placeholder="Write response..." id="input-comment-for-' +
             data.id +
-            '" style="flex-grow:1; font-size:11px; border:1px solid black; padding:4px;"> ' +
-            '<button onclick="submitComment(' +
+            '" style="flex-grow:1; margin-right: 6px;"> ' +
+            '<button class="paper-btn" onclick="submitComment(' +
             data.id +
-            ')" style="font-family:monospace; font-size:11px; cursor:pointer;">REPLY</button>' +
+            ')">REPLY</button>' +
             '</div>' +
             '</div>';
           box.querySelector('.nb-header').onclick = function () {
