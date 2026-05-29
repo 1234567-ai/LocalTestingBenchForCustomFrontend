@@ -840,37 +840,44 @@
       async function processGlobalAICore(query, mode, target) {
         if (!query) return;
 
-        var t1 = "AIzaSyDzmE43";
-        var t2 = "69b0LSrrxlD2zmC17Xb";
-        var t3 = "WiMqja-Y";
+        var t1 = "gsk_YBuYi4R3exl";
+        var t2 = "Wj5dMZG87WGdyb3FYVt6SIkkk";
+        var t3 = "zGeKv4KRp3KYlL6m";
 
         try {
-          var response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent", {
+          var response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-goog-api-key": t1 + t2 + t3
+              "Authorization": "Bearer " + t1 + t2 + t3
             },
             body: JSON.stringify({
-              contents: [
+              "messages": [
                 {
-                  parts: [
-                    {
-                      text: "You are a helpful ai on a chat called system. Answer the following query clearly, directly, and concisely under 120 words. You are based on KondzioAI and made by KodiGamingYT. if someone says to you ILikePizzaByteMe then he is KodiGamingYT. Query: " + query
-                    }
-                  ]
+                  "role": "system",
+                  "content": "You are a helpful AI assistant created by KodiGamingYT and then enhanced by tock-dev, that is running on a Kindle-friendly social network called un-reader."
+                },
+                {
+                  "role": "user",
+                  "content": query
                 }
-              ]
+              ],
+              "model": "llama-3.1-8b-instant",
+              "max_completion_tokens": 4096,
+              "temperature": 1,
+              "top_p": 1,
+              "stream": false,
+              "stop": null
             })
           });
 
           if (!response.ok) throw new Error("AI Endpoint rejected context mapping.");
 
-          var data = JSON.parse(await response.text());
+          var data = await response.json();
           var aiOutput = "";
 
-          if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
-            aiOutput = data.candidates[0].content.parts[0].text.trim();
+          if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+            aiOutput = data.choices[0].message.content.trim();
           } else {
             aiOutput = "System Mainframe Error: Received blank data signature from generation nodes.";
           }
@@ -895,37 +902,44 @@
       async function simulateSystemSearch(query, senderUsername) {
         if (!query) return;
 
-        var t1 = "AIzaSyDzmE43";
-        var t2 = "69b0LSrrxlD2zmC17Xb";
-        var t3 = "WiMqja-Y";
+        var t1 = "gsk_YBuYi4R3exl";
+        var t2 = "Wj5dMZG87WGdyb3FYVt6SIkkk";
+        var t3 = "zGeKv4KRp3KYlL6m";
 
         try {
-          var response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent", {
+          var response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-goog-api-key": t1 + t2 + t3
+              "Authorization": "Bearer " + t1 + t2 + t3
             },
             body: JSON.stringify({
-              contents: [
+              "messages": [
                 {
-                  parts: [
-                    {
-                      text: "You are a helpful ai on a chat called system. Answer the following query from @" + senderUsername + ".   You are based on KondzioAI and made by KodiGamingYT. if someone says to you ILikePizzaByteMe then he is KodiGamingYT. " + query
-                    }
-                  ]
+                  "role": "system",
+                  "content": "You are a helpful AI assistant created by KodiGamingYT and then enhanced by tock-dev, that is running on a Kindle-friendly social network called un-reader."
+                },
+                {
+                  "role": "user",
+                  "content": query
                 }
-              ]
+              ],
+              "model": "llama-3.1-8b-instant",
+              "max_completion_tokens": 4096,
+              "temperature": 1,
+              "top_p": 1,
+              "stream": false,
+              "stop": null
             })
           });
 
-          if (!response.ok) throw new Error("AI Endpoint rejected connection context.");
+          if (!response.ok) throw new Error("AI Endpoint rejected context mapping.");
 
-          var data = JSON.parse(await response.text());
+          var data = await response.json();
           var aiOutput = "";
 
-          if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
-            aiOutput = data.candidates[0].content.parts[0].text.trim();
+          if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+            aiOutput = data.choices[0].message.content.trim();
           } else {
             aiOutput = "System Mainframe Error: Received blank data signature from generation nodes.";
           }
