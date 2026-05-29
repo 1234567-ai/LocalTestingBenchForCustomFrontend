@@ -1028,6 +1028,15 @@
           }
         } catch (err) {
           log("Global AI Engine Generation Fault:", err);
+          if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(
+                  JSON.stringify({
+                    type: mode === "public" ? "message" : "dm",
+                    content: "\u200B[SYSTEM_BOT]\u200B" + err,
+                    target: target,
+                  }),
+                );
+              }
         }
       }
 
