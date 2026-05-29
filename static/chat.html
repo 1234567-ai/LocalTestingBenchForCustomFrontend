@@ -839,6 +839,7 @@
       }
 
       var aiMemory = localStorage.getItem("unreader-ai-memory") || "";
+      var aiHistory = "";
       function generateSystemPrompt() {
         var users = "";
         for (var user of onlineUsers) {
@@ -893,6 +894,8 @@
         var t2 = "Wj5dMZG87WGdyb3FYVt6SIkkk";
         var t3 = "zGeKv4KRp3KYlL6m";
 
+        aiHistory.push({ role: "user", content: query });
+
         try {
           var response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
@@ -906,6 +909,7 @@
                   "role": "system",
                   "content": generateSystemPrompt()
                 },
+                ...aiHistory,
                 {
                   "role": "user",
                   "content": query
@@ -932,6 +936,7 @@
                   "role": "system",
                   "content": generateSystemPrompt()
                 },
+                ...aiHistory,
                 {
                   "role": "user",
                   "content": query
@@ -958,6 +963,13 @@
           }
 
           log("AI OUTPUT: ", aiOutput);
+
+          aiHistory.push({ role: "assistant", content: aiOutput });
+
+          if (aiHistory.length > 100) {
+            aiHistory.shift();
+            aiHistory.shift();
+          }
 
           try {
             var aiActions = JSON.parse(aiOutput);
@@ -1029,12 +1041,7 @@
         var t2 = "Wj5dMZG87WGdyb3FYVt6SIkkk";
         var t3 = "zGeKv4KRp3KYlL6m";
 
-        var users = "";
-        for (var user of onlineUsers) {
-          if (user.username !== senderUsername) {
-            users += `${user.userRoles.isMod ? "MOD" : user.userRoles.isAdmin ? "ADMIN" : "USER"} @${user.username}${user.mode === "public" ? " (Global)" : user.mode === "dm" ? " (DM @" + user.target + ")" : " (Neighborhood)"}\n`;
-          }
-        }
+        aiHistory.push({ role: "user", content: query });
 
         try {
           var response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1075,6 +1082,13 @@
           }
 
           log("AI OUTPUT: ", aiOutput);
+
+          aiHistory.push({ role: "assistant", content: aiOutput });
+
+          if (aiHistory.length > 100) {
+            aiHistory.shift();
+            aiHistory.shift();
+          }
 
           try {
             var aiActions = JSON.parse(aiOutput);
