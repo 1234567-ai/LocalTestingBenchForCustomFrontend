@@ -395,6 +395,27 @@
           </button>
         </div>
 
+        <!-- Links Section placed at the top of settings -->
+        <div class="setting-section-title">Links & Community</div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <h4>Buy us a coffee</h4>
+            <p>Support the development of Un-Reader</p>
+          </div>
+          <div class="setting-control">
+            <button class="modal-btn" onclick="window.location.href='https://www.buymeacoffee.com/tockdev'">Open Link</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <h4>Join our Discord server</h4>
+            <p>Interact and chat with the project community</p>
+          </div>
+          <div class="setting-control">
+            <button class="modal-btn" onclick="window.location.href='https://discord.gg/AqvFPzV8'">Join Server</button>
+          </div>
+        </div>
+
         <div class="setting-section-title">Identity Management</div>
         <div class="setting-row">
           <div class="setting-info">
@@ -595,11 +616,6 @@
           url: 'calc.html',
         },
         {
-          id: 'discord-link',
-          name: 'Join our Discord server',
-          url: 'https://discord.gg/AqvFPzV8',
-        },
-        {
           id: 'rekindle',
           name: 'reKindle',
           url: 'rekindle.html',
@@ -612,11 +628,6 @@
               localStorage.setItem('visited-rekindle-iframe', 'true');
             }
           },
-        },
-        {
-          id: 'buymeacoffee',
-          name: 'Buy me a coffee',
-          url: 'https://www.buymeacoffee.com/tockdev',
         },
         // TODO: setup payment method in Ko-Fi before sharing it
         /* {
