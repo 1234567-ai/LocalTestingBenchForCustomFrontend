@@ -107,8 +107,8 @@
 .mod-indicator-btn {
   border: 2px dashed red !important;
   color: red;
-  font-weight: bold;
-  font-family: monospace;
+  font-weight: bold !important;
+  font-family: monospace !important;
   cursor: pointer;
   text-align: center;
 }

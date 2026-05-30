@@ -345,9 +345,7 @@
         log("Mod mode toggle state:", modModeActive);
         var btn = document.getElementById("mod-mode-btn");
         btn.textContent = modModeActive ? "MOD MODE: ACTIVE" : "MOD MODE: OFF";
-        btn.className = modModeActive
-          ? "mod-indicator-btn mod-indicator-active"
-          : "mod-indicator-btn";
+        btn.classList.toggle("mod-indicator-active", modModeActive);
         loadHistory();
       }
 
