@@ -602,7 +602,16 @@
         {
           id: 'rekindle',
           name: 'reKindle',
-          url: 'https://rekindle.ink',
+          url: 'rekindle.html',
+          onclick: async () => {
+            if (!localStorage.getItem('visited-rekindle-iframe')) {
+              await unAlert(
+                'Warning: The back button might overlap with parts of reKindle apps if you are using full-screen mode. Please turn off full-screen mode in reKindle for best experience.',
+                'OK',
+              );
+              localStorage.setItem('visited-rekindle-iframe', 'true');
+            }
+          },
         },
         { id: 'modmenu', name: 'Moderation', url: 'modmenu.html' },
         { id: 'settings_app', name: 'Settings' },
@@ -624,11 +633,12 @@
           const itemEl = document.createElement('div');
           itemEl.className = 'app-item';
           itemEl.innerHTML = `<div class="app-label">${app.name}</div>`;
-          itemEl.addEventListener('click', () => {
+          itemEl.addEventListener('click', async () => {
             triggerEinkRefreshCheck();
             if (app.id === 'settings_app') {
               openView('settings-view');
             } else {
+              if (app.onclick) await app.onclick();
               window.location.href = app.url;
             }
           });
