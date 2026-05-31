@@ -119,8 +119,10 @@ async function initDatabase() {
         role TEXT PRIMARY KEY,
         prefix TEXT NOT NULL,
         style TEXT NOT NULL,
+        class TEXT NOT NULL,
         priority INTEGER NOT NULL DEFAULT 0
       );
+      ALTER TABLE roles ADD COLUMN IF NOT EXISTS class TEXT;
     `);
     /* INSERT INTO roles (role, prefix, style, priority) VALUES
       ('admin', 'ADMIN', 'background: black !important;color: white !important;border: 3px solid black !important;box-shadow: 4px 4px 0px #0000004a !important;', 1000),
@@ -154,7 +156,9 @@ app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 
+const getUserRolesCache = {};
 async function getUserRoles(username) {
+  if (getUserRolesCache[username]) return getUserRolesCache[username];
   const r = await db.query(
     'SELECT roles, timeout_until, is_banned, last_ip FROM users WHERE username = $1;',
     [username],
@@ -167,11 +171,11 @@ async function getUserRoles(username) {
   };
   res.roles = JSON.parse(res.roles);
   const tempRoles = res.roles;
-  res.role = {};
+  res.role = { role: '', prefix: '', style: '' };
   let priority = -1;
   for (var role of tempRoles) {
     const s = await db.query(
-      'SELECT role, prefix, style, priority FROM roles WHERE role = $1;',
+      'SELECT role, prefix, style, class, priority FROM roles WHERE role = $1;',
       [role],
     );
     if (!s.rows[0] || s.rows[0].priority <= priority) continue;
@@ -180,6 +184,8 @@ async function getUserRoles(username) {
     delete res.role.priority;
   }
   delete res.roles;
+
+  getUserRolesCache[username] = res;
   return res;
 }
 
@@ -441,10 +447,10 @@ app.get('/history', authenticateToken, async (req, res) => {
     [off],
   );
   let result = [];
-  r.rows.forEach((row) => {
-    row.role = getUserRoles(row.username);
+  for (let row of r.rows) {
+    row.role = (await getUserRoles(row.username)).role;
     result.push(row);
-  });
+  }
   res.json(result.reverse());
 });
 
@@ -463,10 +469,10 @@ app.get('/dm-history', authenticateToken, async (req, res) => {
     [req.user.username, target, off],
   );
   let result = [];
-  r.rows.forEach((row) => {
-    row.role = getUserRoles(row.username);
+  for (let row of r.rows) {
+    row.role = (await getUserRoles(row.username)).role;
     result.push(row);
-  });
+  }
   res.json(result.reverse());
 });
 
@@ -478,10 +484,10 @@ app.get('/topic-history', authenticateToken, async (req, res) => {
     [slug, off],
   );
   let result = [];
-  r.rows.forEach((row) => {
-    row.role = getUserRoles(row.username);
+  for (let row of r.rows) {
+    row.role = (await getUserRoles(row.username)).role;
     result.push(row);
-  });
+  }
   res.json(result.reverse());
 });
 
@@ -497,13 +503,13 @@ app.get('/neighborhood-history', authenticateToken, async (req, res) => {
     GROUP BY p.id, u.id ORDER BY p.id DESC LIMIT 10 OFFSET $1;`;
   const posts = await db.query(query, [off]);
   let result = [];
-  posts.rows.forEach((row) => {
-    row.role = getUserRoles(row.username);
-    row.comments.forEach((comment) => {
-      comment.role = getUserRoles(comment.username);
-    });
+  for (let row of posts.rows) {
+    row.role = (await getUserRoles(row.username)).role;
+    for (let comment of row.comments) {
+      comment.role = await getUserRoles(comment.username).role;
+    }
     result.push(row);
-  });
+  }
   res.json(result.reverse());
 });
 

@@ -1,4 +1,5 @@
-const DEBUG = false;
+//! DON'T FORGET TO CHANGE TO `false` BEFORE PUSHING
+const DEBUG = true;
 const DO_LOGGING = true;
 var BACKEND_URL = DEBUG
   ? 'http://192.168.100.64:80'

@@ -974,8 +974,8 @@
           var effectiveUsername =
             data.username || data.sender || 'UNKNOWN_NODE';
           var nameDisplay = DOMPurify.sanitize(
-            data.role.prefix + '@' + effectiveUsername,
-          );
+            (data.role.prefix ?? '') + ' @' + effectiveUsername,
+          ).trim();
           box.innerHTML =
             '<div class="nb-header" style="cursor:pointer;">' +
             nameDisplay +

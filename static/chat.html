@@ -621,6 +621,7 @@
         else {
           styleClass += isMe ? "my-msg" : "other-msg";
         }
+        styleClass += ` ${data.role.class || ''}`;
         msgDiv.className = styleClass;
 
         var timeStr = formatTimeToken(data.timestamp);
@@ -628,8 +629,8 @@
         meta.className = "message-meta";
         meta.style.cursor = "pointer";
         
-        var nameDisplay = data.role.prefix + "@" + effectiveUsername;
-        meta.textContent = nameDisplay + " • " + timeStr;
+        var nameDisplay = (data.role.prefix ?? '') + " @" + effectiveUsername;
+        meta.textContent = nameDisplay.trim() + " • " + timeStr;
         (function (username) {
           meta.onclick = function () {
             openProfileModal(username);
