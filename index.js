@@ -54,8 +54,7 @@ async function initDatabase() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, 
         timeout_until BIGINT DEFAULT 0, is_banned BOOLEAN DEFAULT false,
-        is_admin BOOLEAN DEFAULT false, is_moderator BOOLEAN DEFAULT false, last_ip TEXT,
-        is_bot BOOLEAN DEFAULT false
+        roles TEXT NOT NULL DEFAULT '[]'
       );
       
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
@@ -114,7 +113,18 @@ async function initDatabase() {
       UPDATE neighborhood_comments SET sender = username WHERE sender IS NULL;
 
       UPDATE dms SET username = sender WHERE username IS NULL;
+
+      CREATE TABLE IF NOT EXISTS roles (
+        role TEXT PRIMARY KEY,
+        prefix TEXT NOT NULL,
+        style TEXT NOT NULL,
+        priority INTEGER NOT NULL DEFAULT 0,
+      );
     `);
+    /* INSERT INTO roles (role, prefix, style, priority) VALUES
+      ('admin', 'ADMIN', 'background: black !important;color: white !important;border: 3px solid black !important;box-shadow: 4px 4px 0px #0000004a !important;', 1000),
+      ('moderator', 'MOD', 'border: 3px solid #0000ff !important;box-shadow: 4px 4px 0px #0000ff50 !important;', 50),
+      ('bot', 'BOT', 'border: 3px solid #808080 !important;box-shadow: 4px 4px 0px #80808050 !important;', 10) ON CONFLICT (role) DO NOTHING; */
     log('Structural migration successful.');
   } catch (err) {
     log('DB MIGRATION FAILURE:', err);
@@ -145,18 +155,31 @@ app.use(express.json());
 
 async function getUserRoles(username) {
   const r = await db.query(
-    'SELECT is_admin, is_moderator, timeout_until, is_banned, last_ip FROM users WHERE username = $1;',
+    'SELECT roles, timeout_until, is_banned, last_ip FROM users WHERE username = $1;',
     [username],
   );
-  return (
-    r.rows[0] || {
-      is_admin: false,
-      is_moderator: false,
-      is_banned: false,
-      timeout_until: 0,
-      last_ip: null,
-    }
-  );
+  const res = r.rows[0] || {
+    roles: '[]',
+    timeout_until: 0,
+    is_banned: false,
+    last_ip: null,
+  };
+  res.roles = JSON.parse(res.roles);
+  const tempRoles = res.roles;
+  res.role = {};
+  let priority = -1;
+  for (var role of tempRoles) {
+    const s = await db.query(
+      'SELECT role, prefix, style, priority FROM roles WHERE role = $1;',
+      [role],
+    );
+    if (!s.rows[0] || s.rows[0].priority <= priority) continue;
+    priority = s.rows[0].priority;
+    res.role = s.rows[0];
+    delete res.role.priority;
+  }
+  delete res.roles;
+  return res;
 }
 
 async function authenticateToken(req, res, next) {
@@ -357,14 +380,14 @@ app.get(
   '/api/admin/find-user/:username',
   authenticateToken,
   async (req, res) => {
-    if (!req.user.is_admin && !req.user.is_moderator)
+    if (!['admin', 'moderator'].includes(req.user.role.role))
       return res.status(403).json({ error: 'Unauthorized' });
     const targetUsername = sanitizeUsername(req.params.username);
     log(
-      `Admin User-Search: target=${targetUsername} by=${req.user.username} who is admin (${req.user.is_admin}) and moderator (${req.user.is_moderator})`,
+      `Admin User-Search: target=${targetUsername} by=${req.user.username} who is (${req.user.role.role})`,
     );
     const r = await db.query(
-      'SELECT username, last_ip, timeout_until, is_banned, is_admin, is_moderator FROM users WHERE username = $1;',
+      'SELECT username, last_ip, timeout_until, is_banned, roles FROM users WHERE username = $1;',
       [targetUsername],
     );
     if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
@@ -379,7 +402,7 @@ app.get(
       alts = altsRes.rows.map((r) => r.username);
     }
     // Redact IP for moderators (non-admins)
-    if (!req.user.is_admin) {
+    if (req.user.role.role !== 'admin') {
       userInfo.last_ip = '[redacted]';
     }
     res.json({ ...userInfo, alts });
@@ -387,15 +410,24 @@ app.get(
 );
 
 app.post('/api/admin/set-role', authenticateToken, async (req, res) => {
-  if (!req.user.is_admin)
+  if (req.user.role.role !== 'admin')
     return res.status(403).json({ error: 'Unauthorized' });
   let { target, is_moderator } = req.body;
   target = sanitizeUsername(target);
   log(
     `Role Assignment: ${target} -> mod=${is_moderator} by=${req.user.username}`,
   );
-  await db.query('UPDATE users SET is_moderator = $1 WHERE username = $2;', [
-    is_moderator,
+  let roles = await db.query('SELECT roles FROM users WHERE username = $1;', [
+    target,
+  ]);
+  roles = JSON.parse(roles.rows[0].roles);
+  if (is_moderator) {
+    roles.push('moderator');
+  } else {
+    roles = roles.filter((role) => role !== 'moderator');
+  }
+  await db.query('UPDATE users SET roles = $1 WHERE username = $2;', [
+    JSON.stringify(roles),
     target,
   ]);
   res.json({ success: true });
@@ -404,10 +436,15 @@ app.post('/api/admin/set-role', authenticateToken, async (req, res) => {
 app.get('/history', authenticateToken, async (req, res) => {
   const off = Math.max(0, parseInt(req.query.index ?? '0', 10) * 10);
   const r = await db.query(
-    'SELECT m.*, u.is_admin, u.is_moderator FROM messages m LEFT JOIN users u ON m.username = u.username ORDER BY m.id DESC LIMIT 10 OFFSET $1;',
+    'SELECT m.* FROM messages m LEFT JOIN users u ON m.username = u.username ORDER BY m.id DESC LIMIT 10 OFFSET $1;',
     [off],
   );
-  res.json(r.rows.reverse());
+  let result = [];
+  r.rows.forEach((row) => {
+    row.role = getUserRoles(row.username);
+    result.push(row);
+  });
+  res.json(result.reverse());
 });
 
 app.get('/dm-history', authenticateToken, async (req, res) => {
@@ -416,7 +453,7 @@ app.get('/dm-history', authenticateToken, async (req, res) => {
   // FIX: Force ALIAS and explicit join for name consistency
   const r = await db.query(
     `
-    SELECT d.id, d.sender AS username, d.receiver, d.timestamp, d.content, d.is_deleted, d.deleted_by, u.is_admin, u.is_moderator 
+    SELECT d.id, d.sender AS username, d.receiver, d.timestamp, d.content, d.is_deleted, d.deleted_by 
     FROM dms d 
     LEFT JOIN users u ON d.sender = u.username 
     WHERE (d.sender = $1 AND d.receiver = $2) OR (d.sender = $2 AND d.receiver = $1) 
@@ -424,7 +461,12 @@ app.get('/dm-history', authenticateToken, async (req, res) => {
   `,
     [req.user.username, target, off],
   );
-  res.json(r.rows.reverse());
+  let result = [];
+  r.rows.forEach((row) => {
+    row.role = getUserRoles(row.username);
+    result.push(row);
+  });
+  res.json(result.reverse());
 });
 
 app.get('/topic-history', authenticateToken, async (req, res) => {
@@ -467,7 +509,7 @@ const ALLOWED_CHANNELS = {
 
 wss.on('connection', (ws, req) => {
   let authUser = null;
-  let userRoles = { is_admin: false, is_moderator: false, is_bot: false };
+  let userRoles = { roles: [], banned: false, timeout_until: 0, last_ip: null };
 
   ws.on('message', async (msg) => {
     try {
@@ -478,7 +520,7 @@ wss.on('connection', (ws, req) => {
           authUser = sanitizeUsername(decoded.username);
           userRoles = await getUserRoles(authUser);
           log(
-            `WS Auth Session Established: ${authUser} (Admin: ${userRoles.is_admin}, Mod: ${userRoles.is_moderator})`,
+            `WS Auth Session Established: ${authUser} (Admin: ${userRoles.role === 'admin'}, Mod: ${userRoles.role === 'moderator'})`,
           );
           if (userRoles.is_banned) {
             log(`WS Termination Triggered: Banned or Timed out user session`);
@@ -646,10 +688,12 @@ wss.on('connection', (ws, req) => {
 
         const isOwner = owner === authUser;
         const canUndo =
-          userRoles.is_admin ||
-          (userRoles.is_moderator && targetObj.deleted_by === authUser);
+          userRoles.role === 'admin' ||
+          (userRoles.role === 'moderator' && targetObj.deleted_by === authUser);
         const canDelete =
-          isOwner || userRoles.is_admin || userRoles.is_moderator;
+          isOwner ||
+          userRoles.role === 'admin' ||
+          userRoles.role === 'moderator';
 
         // Deletes
         if (data.type === 'mod_delete' && canDelete) {
@@ -661,7 +705,11 @@ wss.on('connection', (ws, req) => {
             `UPDATE ${targetTable} SET is_deleted = true, deleted_by = $1 WHERE id = $2;`,
             [authUser, data.id],
           );
-          if (!isOwner && userRoles.is_moderator && !userRoles.is_admin) {
+          if (
+            !isOwner &&
+            userRoles.role === 'moderator' &&
+            userRoles.role !== 'admin'
+          ) {
             await db.query(
               'INSERT INTO mod_logs (mod_username, action_type, target_username, target_id, reason, timestamp) VALUES ($1, $2, $3, $4, $5, $6);',
               [authUser, 'delete', owner, data.id, reason, Date.now()],
@@ -686,12 +734,12 @@ wss.on('connection', (ws, req) => {
       }
 
       // Moderating users
-      if (userRoles.is_admin || userRoles.is_moderator) {
+      if (userRoles.role === 'admin' || userRoles.role === 'moderator') {
         // Timeouts
         if (data.type === 'mod_timeout') {
           const target = sanitizeUsername(data.target);
           const targetRoles = await getUserRoles(target);
-          if (targetRoles.is_admin)
+          if (targetRoles.role === 'admin')
             return ws.send(
               JSON.stringify({
                 type: 'error_alert',
@@ -702,9 +750,10 @@ wss.on('connection', (ws, req) => {
             Math.max(1, parseInt(data.duration, 10)),
             43200,
           ); // Max 30 days
-          const reason = userRoles.is_admin
-            ? "Admin doesn't need any reasons"
-            : sanitize(data.reason || 'No reason provided');
+          const reason =
+            userRoles.role === 'admin'
+              ? "Admin doesn't need any reasons"
+              : sanitize(data.reason || 'No reason provided');
           log(
             `USER TIMEOUT: target=${target}, duration=${duration}m, by=${authUser}`,
           );
@@ -732,15 +781,16 @@ wss.on('connection', (ws, req) => {
             return log(`KICK TARGET ${data.target} NOT CONNECTED`, data.target);
           const targetRoles = await getUserRoles(data.target);
           if (
-            userRoles.is_admin ||
-            (userRoles.is_moderator &&
-              !targetRoles.is_admin &&
+            userRoles.role === 'admin' ||
+            (userRoles.role === 'moderator' &&
+              targetRoles.role !== 'admin' &&
               data.target !== authUser)
           ) {
             const client = activeClients.get(data.target);
-            const reason = userRoles.is_admin
-              ? "Admin doesn't need any reasons"
-              : sanitize(data.reason || 'No reason provided');
+            const reason =
+              userRoles.role === 'admin'
+                ? "Admin doesn't need any reasons"
+                : sanitize(data.reason || 'No reason provided');
             client.ws.send(
               JSON.stringify({
                 type: 'terminated',
@@ -756,13 +806,14 @@ wss.on('connection', (ws, req) => {
             );
           }
         }
-        if (userRoles.is_admin) {
+        if (userRoles.role === 'admin') {
           // Bans
           if (data.type === 'mod_ban') {
             const target = sanitizeUsername(data.target);
-            const reason = userRoles.is_admin
-              ? "Admin doesn't need any reasons"
-              : sanitize(data.reason || 'No reason provided');
+            const reason =
+              userRoles.role === 'admin'
+                ? "Admin doesn't need any reasons"
+                : sanitize(data.reason || 'No reason provided');
             log(`ADMIN BAN: target=${target}, by=${authUser}`);
             await db.query(
               'UPDATE users SET is_banned = true WHERE username = $1;',

@@ -305,7 +305,7 @@
       var token = localStorage.getItem('token');
       var myUsername = localStorage.getItem('username');
       var socket = null;
-      var userRoles = { is_admin: false, is_moderator: false };
+      var userRoles = { role: {role: '', prefix: '', style: ''}, is_banned: false, timeout_until: 0, last_ip: null };
 
       function initApp() {
         log('Booting moderation layers.');
@@ -338,7 +338,7 @@
               userRoles = data.user_roles;
               log('Mod console roles synced:', userRoles);
 
-              if (!userRoles.is_admin && !userRoles.is_moderator) {
+              if (!['admin', 'moderator'].includes(userRoles.role.role)) {
                 await unAlert(
                   'Access Denied: You do not possess structural operator credentials.',
                 );
@@ -347,9 +347,9 @@
               }
 
               document.getElementById('mod-role-text').textContent =
-                userRoles.is_admin ? 'ADMINISTRATOR' : 'MODERATOR';
+                userRoles.role.role.toUpperCase();
               document.getElementById('mod-role-text').style.color =
-                userRoles.is_admin ? '#ff0000' : '#0000ff';
+                userRoles.role.role === 'admin' ? '#ff0000' : '#0000ff';
             }
             return;
           }
@@ -434,7 +434,7 @@
               <strong>Username:</strong> ${safeUsername}<br>
               <strong>Last IP:</strong> ${safeIP}<br>
               <strong>Status:</strong> ${safeStatus}<br>
-              <strong>Roles:</strong> Admin: ${u.is_admin}, Mod: ${u.is_moderator}<br>`;
+              <strong>Roles:</strong> ${JSON.parse(u.roles).map((r) => r.role.toUpperCase()).join(', ')}<br>`;
               if (u.alts && u.alts.length > 0) {
                 html += `<strong>Alt Accounts:</strong> ${safeAlts}<br>`;
               }
@@ -444,7 +444,7 @@
                 Duration (mins): <input type="number" id="admin-timeout-dur" value="60" style="width: 50px; padding:4px; border:var(--border-width) solid var(--border-color); background:var(--bg-color); color:var(--text-color);">
                 <button class="retro-btn" onclick="submitTimeout('${safeUsername}')">TIMEOUT</button>
               </div>`;
-              if (userRoles.is_admin) {
+              if (userRoles.role.role === 'admin') {
                 html += `<div style="border-top: 1px dotted var(--border-color); padding-top:8px; margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
                 <button class="retro-btn" onclick="setModeratorAction('${safeUsername}', ${!u.is_moderator})">${u.is_moderator ? 'REMOVE MOD ROLE' : 'PROMOTE TO MOD'}</button>
                 <button class="retro-btn danger-btn" onclick="adminAction('mod_ban', '${safeUsername}')">BAN USER</button>
@@ -474,8 +474,8 @@
         var dur = document.getElementById('admin-timeout-dur').value;
         if (!socket || socket.readyState !== WebSocket.OPEN)
           return await unAlert('Socket offline.');
-        var reason = userRoles.is_admin ? 'Admin doesn\'t need any reasons' : await unPrompt('Reason for timeout?');
-        if (!userRoles.is_admin && !reason) return;
+        var reason = userRoles.role.role === 'admin' ? 'Admin doesn\'t need any reasons' : await unPrompt('Reason for timeout?');
+        if (userRoles.role.role !== 'admin' && !reason) return;
         var payload = {
           type: 'mod_timeout',
           target: targetUser,
@@ -517,7 +517,7 @@
       }
 
       async function banIP(targetUser) {
-        if (!userRoles.is_admin) return await unAlert('Only admins can ban IPs.');
+        if (!userRoles.role.role === 'admin') return await unAlert('Only admins can ban IPs.');
         var xhr = new XMLHttpRequest();
         xhr.open('POST', BACKEND_URL + '/api/admin/ban-ip', true);
         xhr.setRequestHeader('Content-Type', 'application/json');

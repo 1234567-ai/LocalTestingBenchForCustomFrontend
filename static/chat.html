@@ -338,7 +338,7 @@
       var isRegisterMode = false;
       var currentHistoryIndex = 0;
       var modModeActive = false;
-      var userRoles = { is_admin: false, is_moderator: false };
+      var userRoles = { role: {role:'', prefix: '', style: ''}, is_banned: false, timeout_until: 0, last_ip: null };
 
       function toggleModMode() {
         modModeActive = !modModeActive;
@@ -426,7 +426,7 @@
             return;
           }
           if (data.type === "auth_success") {
-            if (data.userRoles.is_admin) {
+            if (data.userRoles.role.role==='admin') {
               show('#kick-all-btn')
             }
             return;
@@ -448,7 +448,7 @@
             if (data.user_roles) {
               userRoles = data.user_roles;
               log("Roles updated:", userRoles);
-              if (userRoles.is_admin || userRoles.is_moderator) {
+              if (userRoles.role.role==='admin' || userRoles.role.role==='moderator') {
                 document.querySelector('#mod-toggle-container').style.display = "flex";
                 localStorage.setItem("unreader-rank", "mod");
               } else {
@@ -513,12 +513,12 @@
           div.appendChild(span);
           log("Showing online user: " + u.username +
             (u.mode === "public" ? " (Global)" : u.mode === "dm" ? " (DM @" + u.target + ")" : " (Neighborhood)") +
-            " who " + ((userRoles.is_admin || userRoles.is_moderator)
+            " who " + ((userRoles.role.role==='admin' || userRoles.role.role==='moderator')
               && u.username !== myUsername ? "can" : "cannot") + " be kicked.");
           if (u.username !== myUsername
-            && (userRoles.is_admin ||
-            (userRoles.is_moderator
-            && !u.userRoles.is_admin))) {
+            && (userRoles.role.role==='admin' ||
+            (userRoles.role.role==='moderator'
+            && !userRoles.role.role==='admin'))) {
             const username = u.username;
             var kick = document.createElement("button");
             kick.className = "paper-btn";
@@ -601,8 +601,7 @@
         if (data.content && data.content.startsWith("\u200B[SYSTEM_BOT]\u200B")) {
           data.username = "system"; // Forces UI to parse identity as system
           data.content = data.content.replace("\u200B[SYSTEM_BOT]\u200B", ""); // Clear raw tag block
-          data.is_admin = false; // STRIP ADMIN PRIVILEGES FROM SENDER TO PREVENT BADGE CLONING
-          data.is_bot = true; // Inject pure layout flag for distinct system rank rendering
+          data.role = { role: 'bot', prefix: 'BOT', style: 'border: 3px solid #808080 !important;box-shadow: 4px 4px 0px #80808050 !important;', priority: 10 };
         }
         // ----------------------------------------------
 
@@ -615,14 +614,12 @@
         var effectiveUsername = data.username || data.sender || "UNKNOWN_NODE";
         var isMe = effectiveUsername === myUsername;
         msgDiv.style.float = isMe ? "right" : "left";
+        msgDiv.style += data.role.style
 
         var styleClass = "message ";
         if (data.is_deleted) styleClass += "purged-msg";
         else {
-          if (data.is_bot) styleClass += "mod-msg"; // Uses clean system box styling
-          else if (data.is_admin) styleClass += "admin-msg";
-          else if (data.is_moderator || effectiveUsername === "system") styleClass += "mod-msg";
-          else styleClass += isMe ? "my-msg" : "other-msg";
+          styleClass += isMe ? "my-msg" : "other-msg";
         }
         msgDiv.className = styleClass;
 
@@ -670,7 +667,7 @@
 
       function injectModTray(targetNode, data, isMe) {
         if (
-          (!userRoles.is_admin && !userRoles.is_moderator) ||
+          (!userRoles.role.role==='admin' && !userRoles.role.role==='moderator') ||
           !modModeActive ||
           data.id === -1
         )
@@ -685,7 +682,7 @@
           dBtn.className = "mod-tray-btn";
           dBtn.textContent = "PURGE";
           dBtn.onclick = async function () {
-            var r = userRoles.is_admin
+            var r = userRoles.role.role==='admin'
               ? "Admin doesn't need any reasons"
               : await unPrompt('Reason for purge?');
             if (r !== null) sendModAction("mod_delete", data.id, r);
@@ -694,8 +691,8 @@
         }
         else {
           if (
-            userRoles.is_admin ||
-            (userRoles.is_moderator && data.deleted_by === myUsername)
+            userRoles.role.role==='admin' ||
+            (userRoles.role.role==='moderator' && data.deleted_by === myUsername)
           ) {
             var rBtn = document.createElement("button");
             rBtn.className = "mod-tray-btn";
@@ -726,8 +723,8 @@
         if (!socket || socket.readyState !== WebSocket.OPEN)
           return await unAlert('Socket offline.');
         if (reason === null) {
-          reason = userRoles.is_admin ? 'Admin doesn\'t need any reasons' : await unPrompt('Reason for kick?');
-          if (!userRoles.is_admin && !reason) return;
+          reason = userRoles.role.role==='admin' ? 'Admin doesn\'t need any reasons' : await unPrompt('Reason for kick?');
+          if (!userRoles.role.role==='admin' && !reason) return;
         }
         var payload = {
           type: 'mod_kick',
@@ -741,7 +738,7 @@
       function kickAllUsers() {
         for (const user of onlineUsers) {
           const username = user.username;
-          if (username === myUsername || user.userRoles.is_admin) continue;
+          if (username === myUsername || user.userRoles.role.role==='admin') continue;
           kickUser(username);
         }
       }
@@ -841,7 +838,7 @@
       function generateSystemPrompt() {
         var users = "";
         for (var user of onlineUsers) {
-          users += `${user.userRoles.is_moderator ? "MOD" : user.userRoles.is_admin ? "ADMIN" : "USER"} @${user.username}${user.mode === "public" ? " (Global)" : user.mode === "dm" ? " (DM @" + user.target + ")" : " (Neighborhood)"}\n`;
+          users += `${user.userRoles.role.prefix} @${user.username}${user.mode === "public" ? " (Global)" : user.mode === "dm" ? " (DM @" + user.target + ")" : " (Neighborhood)"}\n`;
         }
         aiMemory = localStorage.getItem("unreader-ai-memory") || "";
         const prompt = `You are a helpful AI assistant named "system" created by KodiGamingYT and then enhanced by tock-dev, that is running on a Kindle-friendly social network called un-reader.
@@ -1211,7 +1208,7 @@
           show('#info-dm-btn');
         }
 
-        if (userRoles.is_admin) {
+        if (userRoles.role.role==='admin') {
           show('#admin-controls')
           show('#admin-ban-btn')
           show('#admin-pardon-btn')
@@ -1229,7 +1226,7 @@
           };
           document.getElementById("admin-timeout-btn").onclick = async function () {
             var dur = document.getElementById("admin-timeout-dur").value;
-            var r = userRoles.is_admin
+            var r = userRoles.role.role==='admin'
               ? "Admin doesn't need any reasons"
               : await unPrompt('Reason for timeout?');
             socket.send(
@@ -1241,14 +1238,14 @@
               }),
             );
           };
-        } else if (userRoles.is_moderator && !isSelf) {
+        } else if (userRoles.role.role==='moderator' && !isSelf) {
           show('#admin-controls')
           hide('#admin-ban-btn')
           hide('#admin-pardon-btn')
           show('#admin-timeout-btn')
           document.getElementById("admin-timeout-btn").onclick = async function () {
             var dur = document.getElementById("admin-timeout-dur").value;
-            var r = userRoles.is_admin
+            var r = userRoles.role.role==='admin'
               ? "Admin doesn't need any reasons"
               : await unPrompt('Reason for timeout?');
             if (r)
