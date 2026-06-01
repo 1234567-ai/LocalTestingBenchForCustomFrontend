@@ -546,7 +546,17 @@ const ALLOWED_CHANNELS = {
 
 wss.on('connection', (ws, req) => {
   let authUser = null;
-  let userRoles = { roles: [], banned: false, timeout_until: 0, last_ip: null };
+  let userRoles = {
+    role: {
+      role: '',
+      prefix: '',
+      style: '',
+      class: '',
+    },
+    is_banned: false,
+    timeout_until: 0,
+    last_ip: null,
+  };
 
   ws.on('message', async (msg) => {
     try {

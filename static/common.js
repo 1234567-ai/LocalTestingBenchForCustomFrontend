@@ -101,7 +101,8 @@ function parseMarkup(text) {
   if (!text) return '';
   const escaped = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   if (navigator.userAgent.toLowerCase().includes('kindle')) {
-    return DOMPurify.sanitize(parseMarkdownForKindle(escaped));
+    return DOMPurify.sanitize(text);
+    // return DOMPurify.sanitize(parseMarkdownForKindle(escaped));
   }
   return DOMPurify.sanitize(marked.parse(escaped)).trim();
 }
