@@ -638,11 +638,6 @@ const server = app.listen(process.env.PORT || 10000, '0.0.0.0', () =>
   log(`Node strictly bound to port: ${process.env.PORT || 10000}`),
 );
 const wss = new WebSocketServer({ server });
-server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request);
-  });
-});
 
 const ALLOWED_CHANNELS = {
   public: 'messages',
