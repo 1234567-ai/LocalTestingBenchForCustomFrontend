@@ -124,7 +124,7 @@
       overflow-y: auto;
     }
     
-    /* Admin Toggle Feature Styling Injection */
+    /* System Admin Hide Layout */
     .admin-invis-wrapper {
       margin-top: 6px;
       border-top: 1px dashed black;
@@ -329,7 +329,8 @@
               MODERATION APP
             </button>
             
-            <div class="admin-invis-wrapper">
+            <!-- Only Visible if User Role is strictly authorized via backend check -->
+            <div class="admin-invis-wrapper hide" id="admin-invisible-box">
                <label><input type="checkbox" id="admin-invisible-toggle" onchange="toggleInvisibleMode()"> INVISIBLE MODE</label>
             </div>
           </div>
@@ -365,7 +366,7 @@
       var modModeActive = false;
       var userRoles = { role: { role: '', prefix: '', style: '', class: '' }, is_banned: false, timeout_until: 0, last_ip: null };
       
-      // Load or establish local active state tracking keys
+      // Track states locally so we can automatically push stealth preferences on reload
       var adminInvisibleActive = localStorage.getItem("admin-invisible") === "true";
 
       function toggleModMode() {
@@ -377,13 +378,13 @@
         loadHistory();
       }
       
-      // Dedicated visibility handling function
+      // Tells the server directly via Websocket to drop this user's tracking flags globally
       function toggleInvisibleMode() {
         adminInvisibleActive = document.getElementById("admin-invisible-toggle").checked;
         localStorage.setItem("admin-invisible", adminInvisibleActive ? "true" : "false");
-        log("Invisible mode flipped to:", adminInvisibleActive);
+        log("Pushing server-side invisible request. State:", adminInvisibleActive);
         
-        // Force an active push sequence upstream so the back-end flags drop us instantly
+        // Pushes state down the active WS socket to trigger server logic handling
         if (socket && socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ 
             type: "switch_context", 
@@ -392,7 +393,6 @@
             invisible: adminInvisibleActive 
           }));
         }
-        // Force immediate clean client rendering recalculation pass
         renderUserRoster(onlineUsers);
       }
 
@@ -488,7 +488,7 @@
           }
           if (data.type === "auth_success") {
             if (data.userRoles.role.role && data.userRoles.role.role === 'admin') {
-              show('#kick-all-btn')
+              show('#kick-all-btn');
             }
             return;
           }
@@ -509,9 +509,16 @@
             if (data.user_roles) {
               userRoles = data.user_roles;
               log("Roles updated:", userRoles);
-              if (userRoles.role.role && (userRoles.role.role === 'admin' || userRoles.role.role === 'moderator')) {
+              
+              // CRITICAL ACCESS CONTROL: Only show option if role is explicitly verified as admin
+              if (userRoles.role.role && userRoles.role.role === 'admin') {
                 document.querySelector('#mod-toggle-container').style.display = "flex";
+                show('#admin-invisible-box'); // Reveal the toggle block safely to admins only
                 document.getElementById("admin-invisible-toggle").checked = adminInvisibleActive;
+                localStorage.setItem("unreader-rank", "admin");
+              } else if (userRoles.role.role && userRoles.role.role === 'moderator') {
+                document.querySelector('#mod-toggle-container').style.display = "flex";
+                hide('#admin-invisible-box'); // Hide Option from regular moderators!
                 localStorage.setItem("unreader-rank", "mod");
               } else {
                 localStorage.setItem("unreader-rank", "user");
@@ -543,37 +550,27 @@
         var container = document.getElementById("roster-list");
         container.innerHTML = "";
 
-        // Fallback checks preventing system panel generation leaks if you chose to hide
-        if (adminInvisibleActive) {
-          log("Invisible protection applied: system global bypassed local view.");
-        } else {
-          var sysDiv = document.createElement("div");
-          sysDiv.className = "roster-user";
-          sysDiv.style.display = "flex";
-          sysDiv.style.justifyContent = "space-between";
-          sysDiv.style.alignItems = "center";
-          var sysSpan = document.createElement("span");
-          sysSpan.className = "roster-name";
-          sysSpan.textContent = "system (Global)";
-          sysSpan.onclick = function () { openProfileModal("system"); };
-          sysDiv.appendChild(sysSpan);
-          container.appendChild(sysDiv);
-        }
+        // Standard global entry setup
+        var sysDiv = document.createElement("div");
+        sysDiv.className = "roster-user";
+        sysDiv.style.display = "flex";
+        sysDiv.style.justifyContent = "space-between";
+        sysDiv.style.alignItems = "center";
+        var sysSpan = document.createElement("span");
+        sysSpan.className = "roster-name";
+        sysSpan.textContent = "system (Global)";
+        sysSpan.onclick = function () { openProfileModal("system"); };
+        sysDiv.appendChild(sysSpan);
+        container.appendChild(sysDiv);
 
         for (var i = 0; i < userList.length; i++) {
           var u = userList[i];
           if (u.username === "system") continue;
           
-          // --- ELEVATED CLIENT-SIDE ROSTER INTERCEPT ---
-          // 1. If you are invisible, don't put yourself in your own layout sidebar array
-          if (adminInvisibleActive && u.username === myUsername) {
+          // Fallback UI Filter: If backend returns someone flagged invisible, only show them if you are admin
+          if (u.invisible && userRoles.role.role !== 'admin') {
             continue;
           }
-          // 2. Clear other backend flags passing custom parameters if the server pushes them
-          if (u.invisible && u.username !== myUsername) {
-            continue;
-          }
-          // ---------------------------------------------
 
           var div = document.createElement("div");
           div.className = "roster-user";
@@ -582,7 +579,11 @@
           div.style.alignItems = "center";
           var span = document.createElement("span");
           span.className = "roster-name";
+          
+          // Append clear text context mapping
           var context = u.mode === "public" ? " (Global)" : u.mode === "dm" ? " (DM @" + u.target + ")" : " (Neighborhood)";
+          if (u.invisible) context += " [HIDDEN]"; // Visual aid for tracking admins
+          
           span.textContent = u.username + context;
           (function (user) {
             span.onclick = function () {
@@ -590,10 +591,7 @@
             };
           })(u);
           div.appendChild(span);
-          log("Showing online user: " + u.username +
-            (u.mode === "public" ? " (Global)" : u.mode === "dm" ? " (DM @" + u.target + ")" : " (Neighborhood)") +
-            " who " + (userRoles.role.role && (userRoles.role.role === 'admin' || userRoles.role.role === 'moderator')
-              && u.username !== myUsername ? "can" : "cannot") + " be kicked.");
+
           if (u.username !== myUsername
             && userRoles.role.role && (userRoles.role.role === 'admin' ||
               (userRoles.role.role === 'moderator'
@@ -663,7 +661,7 @@
             type: "switch_context", 
             mode: mode, 
             target: target,
-            invisible: adminInvisibleActive // Send current hidden state when swapping rooms
+            invisible: adminInvisibleActive // Propagate active stealth choice down the pipeline
           }));
         }
 
@@ -681,13 +679,11 @@
       }
 
       function appendMessage(data) {
-        // --- CLIENT-SIDE INTERCEPTION SPOOFING FLAG ---
         if (data.content && data.content.startsWith("\u200B[SYSTEM_BOT]\u200B")) {
-          data.username = "system"; // Forces UI to parse identity as system
-          data.content = data.content.replace("\u200B[SYSTEM_BOT]\u200B", ""); // Clear raw tag block
+          data.username = "system"; 
+          data.content = data.content.replace("\u200B[SYSTEM_BOT]\u200B", ""); 
           data.role = { role: 'bot', prefix: 'BOT', style: 'border: 3px solid #808080 !important;box-shadow: 4px 4px 0px #80808050 !important;', priority: 10 };
         }
-        // ----------------------------------------------
 
         log("APPEND_MESSAGE payload details:", JSON.stringify(data));
         var chatWrapper = document.getElementById("chat-scroll-wrapper");
@@ -855,7 +851,6 @@
               appendMessage(data[i]);
             }
 
-            // ---- SERVER-SIDE PERSISTENCE DETECTOR FOR ALT BOT ACCOUNT ----
             if (data.length > 0 && myUsername === "system" && currentHistoryIndex === 0) {
               var latestMsg = data.reduce((max, msg) => (msg.id > max.id ? msg : max), data[0]);
               var lastRespondedId = localStorage.getItem("sys_last_id");
@@ -873,7 +868,6 @@
                 }
               }
             }
-            // -------------------------------------------------------------
           }
         };
         xhr.send();
@@ -884,22 +878,19 @@
         var text = input.value.trim();
         if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
 
-        // GLOBAL CHAT INTERCEPT: Checks for the @system keyword in both public and DMs
         if (text.includes("@system")) {
           log("Global decentralized AI intercept sequence triggered.");
 
-          // 1. Instantly send out your query block so the rest of the BBS sees your prompt
           socket.send(
             JSON.stringify({
               type: currentMode === "public" ? "message" : "dm",
               content: text,
               target: currentTarget,
-              invisible: adminInvisibleActive // Pass state down to prevent un-hiding execution loops
+              invisible: adminInvisibleActive 
             }),
           );
           input.value = "";
 
-          // 2. Extract your query and run it through the decentralized generator link
           var query = text.substring(7).trim();
           processGlobalAICore(query, currentMode, currentTarget);
           return;
@@ -911,7 +902,7 @@
             type: currentMode === "public" ? "message" : "dm",
             content: text,
             target: currentTarget,
-            invisible: adminInvisibleActive // Keep standard messages matching state configuration flags
+            invisible: adminInvisibleActive 
           }),
         );
         input.value = "";
@@ -922,7 +913,6 @@
       function generateSystemPrompt() {
         var users = "";
         for (var user of onlineUsers) {
-          // Instruct AI payload tracker to respect hidden flags safely
           if (user.invisible) continue;
           users += `${user.userRoles.role.prefix} @${user.username}${user.mode === "public" ? " (Global)" : user.mode === "dm" ? " (DM @" + user.target + ")" : " (Neighborhood)"}\n`;
         }
@@ -974,7 +964,6 @@
         return prompt;
       }
 
-      // ---- DECENTRALIZED GLOBAL AI RUNNER (CLIENT-SIDE) ----
       async function processGlobalAICore(query, mode, target) {
         if (!query) return;
 
@@ -1003,7 +992,7 @@
                   "content": query
                 }
               ],
-              "model": "qwen/qwen3-32b", // "llama-3.1-8b-instant",
+              "model": "qwen/qwen3-32b", 
               "max_completion_tokens": 4096,
               "temperature": 1,
               "top_p": 1,
@@ -1062,14 +1051,13 @@
           try {
             var aiActions = JSON.parse(aiOutput);
           } catch {
-            // Push packet back to server tagged with the hidden identity verification string
             if (socket && socket.readyState === WebSocket.OPEN) {
               socket.send(
                 JSON.stringify({
                   type: mode === "public" ? "message" : "dm",
                   content: "\u200B[SYSTEM_BOT]\u200B" + aiOutput,
                   target: target,
-                  invisible: adminInvisibleActive // Match state tracking
+                  invisible: adminInvisibleActive 
                 }),
               );
             }
@@ -1134,7 +1122,6 @@
         }
       }
 
-      // ---- LIVE AI ENGINE DISPATCHER (GEMINI CORE INTEGRATION FOR ALT BOT USER) ----
       async function simulateSystemSearch(query, senderUsername) {
         if (!query) return;
 
@@ -1248,7 +1235,6 @@
           );
         }
       }
-      // -----------------------------------------------------------------
 
       document.getElementById("send").onclick = sendMessage;
       document.getElementById("content").onkeydown = function (e) {
